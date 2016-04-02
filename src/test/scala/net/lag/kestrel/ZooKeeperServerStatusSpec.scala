@@ -25,14 +25,18 @@ import com.twitter.thrift.{Status => TStatus}
 import com.twitter.util.{MockTimer, TempFolder, Time, TimeControl}
 import java.io._
 import java.net.{InetAddress, InetSocketAddress, UnknownHostException}
-import org.specs.SpecificationWithJUnit
-import org.specs.mock.{ClassMocker, JMocker}
+import org.specs2.execute.AsResult
+import org.specs2.mutable._
+import org.specs2.mock._
 import scala.collection.JavaConversions
 import scala.collection.mutable.Queue
 import config._
 
-class ZooKeeperServerStatusSpec extends SpecificationWithJUnit with JMocker with ClassMocker with TempFolder
+class ZooKeeperServerStatusSpec extends Specification with Mockito with TempFolder
 with TestLogging {
+
+  isolated
+
   val mockZKClient = mock[ZooKeeperClient]
   val mockZKServerSets = Map(
     "/kestrel/read"  -> Queue[ServerSet](),
@@ -77,10 +81,10 @@ with TestLogging {
     val readStatus = mock[EndpointStatus]
     val writeStatus = mock[EndpointStatus]
 
-    expect {
-      initialJoin("read", memcache, thrift, text, initialStatus) willReturn readStatus
-      initialJoin("write", memcache, thrift, text, initialStatus) willReturn writeStatus
-    }
+//    expect {
+      initialJoin("read", memcache, thrift, text, initialStatus) returns readStatus
+      initialJoin("write", memcache, thrift, text, initialStatus)  returns writeStatus
+//    }
 
     (readStatus, writeStatus)
   }
@@ -101,7 +105,10 @@ with TestLogging {
                   initialStatus: TStatus = TStatus.DEAD) = {
     val (main, eps) = endpoints(memcache, thrift, text)
 
-    one(nextMockZKServerSet(nodeType)).join(main, JavaConversions.asJavaMap(eps), initialStatus)
+    val mockServerSet = nextMockZKServerSet(nodeType)
+
+    // return serverset operation to define mock result in test.
+    mockServerSet.join(main, JavaConversions.mapAsJavaMap(eps), initialStatus)
   }
 
   def rejoin(nodeType: String,
@@ -110,7 +117,8 @@ with TestLogging {
              text: Option[InetSocketAddress] = None) = {
     val (main, eps) = endpoints(memcache, thrift, text)
 
-    one(nextMockZKServerSet(nodeType)).join(main, JavaConversions.asJavaMap(eps), TStatus.ALIVE)
+    val mockServerSet = nextMockZKServerSet(nodeType)
+    mockServerSet.join(main, JavaConversions.mapAsJavaMap(eps), TStatus.ALIVE)
   }
 
   def withZooKeeperServerStatus(f: (ZooKeeperServerStatus, TimeControl) => Unit) {
@@ -148,13 +156,17 @@ with TestLogging {
           serverStatus.markUp()
           serverStatus.status mustEqual Up
 
-          expect {
-            one(mockZKClient).close()
-          }
 
           serverStatus.shutdown()
           serverStatus.status mustEqual Down
+
+          got {
+            one(mockZKClient).close()
+          }
+
         }
+        success
+
       }
 
       "throw on unsuccessful change" in {
@@ -169,13 +181,13 @@ with TestLogging {
 
           serverStatus.addEndpoints("memcache", Map("memcache" -> memcacheAddr))
 
-          expect {
-            rejoin("read", Some(memcacheAddr)) willThrow new Group.JoinException("boom", new Exception)
-          }
+          rejoin("read", Some(memcacheAddr)) throws new Group.JoinException("boom", new Exception)
 
           serverStatus.markUp() must throwA[Group.JoinException]
           storedStatus() mustEqual "Quiescent"
         }
+        success
+
       }
     }
 
@@ -186,13 +198,13 @@ with TestLogging {
 
           serverStatus.addEndpoints("memcache", Map("memcache" -> memcacheAddr, "thrift" -> thriftAddr))
 
-          expect {
-            rejoin("write", Some(memcacheAddr), Some(thriftAddr)) willReturn mock[EndpointStatus]
-            rejoin("read", Some(memcacheAddr), Some(thriftAddr)) willReturn mock[EndpointStatus]
-          }
+          rejoin("write", Some(memcacheAddr), Some(thriftAddr)) returns mock[EndpointStatus]
+          rejoin("read", Some(memcacheAddr), Some(thriftAddr)) returns mock[EndpointStatus]
 
           serverStatus.markUp()
         }
+        success
+
       }
 
       "join serversets with newly added endpoints with the current status" in {
@@ -204,6 +216,8 @@ with TestLogging {
 
           serverStatus.addEndpoints("memcache", Map("memcache" -> memcacheAddr, "thrift" -> thriftAddr))
         }
+        success
+
       }
 
       "update all existing serversets when status changes from alive to dead" in {
@@ -215,13 +229,16 @@ with TestLogging {
 
           serverStatus.addEndpoints("memcache", Map("memcache" -> memcacheAddr, "thrift" -> thriftAddr))
 
-          expect {
+          serverStatus.markQuiescent()
+
+          got {
             one(writeStatus).update(TStatus.DEAD)
             one(readStatus).update(TStatus.DEAD)
           }
 
-          serverStatus.markQuiescent()
         }
+        success
+
       }
 
       "skip updating with unchanged status" in {
@@ -233,21 +250,24 @@ with TestLogging {
 
           serverStatus.addEndpoints("memcache", Map("memcache" -> memcacheAddr, "thrift" -> thriftAddr))
 
-          expect {
-            one(writeStatus).update(TStatus.DEAD)
-          }
-
           serverStatus.markReadOnly()
 
           tc.advance(31.seconds)
           mockTimer.tick()
 
-          expect {
+          got {
             one(readStatus).update(TStatus.DEAD)
           }
 
           serverStatus.markQuiescent()
+
+          got {
+            one(writeStatus).update(TStatus.DEAD)
+          }
+
         }
+        success
+
       }
 
     }
@@ -263,6 +283,8 @@ with TestLogging {
 
           serverStatus.addEndpoints("memcache", Map("memcache" -> wildcardAddr))
         }
+        success
+
       }
 
       "should explode if given the loopback address" in {
@@ -271,6 +293,8 @@ with TestLogging {
 
           serverStatus.addEndpoints("memcache", Map("memcache" -> localhostAddr)) must throwA[UnknownHostException]
         }
+        success
+
       }
 
       "should leave non-wildcard, non-loopback addresses alone" in {
@@ -279,6 +303,8 @@ with TestLogging {
           val (readStatus, writeStatus) = expectInitialEndpointStatus(Some(addr))
           serverStatus.addEndpoints("memcache", Map("memcache" -> addr))
         }
+        success
+
       }
     }
   }

@@ -22,11 +22,14 @@ import com.twitter.logging.TestLogging
 import com.twitter.ostrich.stats.Stats
 import com.twitter.util.{Duration, MockTimer, TempFolder, Time, TimeControl}
 import java.io._
-import org.specs.SpecificationWithJUnit
-import org.specs.mock.{ClassMocker, JMocker}
+import org.specs2.mock._
+import org.specs2.mutable._
 
-class ServerStatusSpec extends SpecificationWithJUnit with JMocker with ClassMocker with TempFolder
+class ServerStatusSpec extends Specification with Mockito with TempFolder
 with TestLogging {
+
+  isolated
+
   val mockTimer: MockTimer = new MockTimer
 
   def statusFile = canonicalFolderName + "/state"
@@ -67,6 +70,7 @@ with TestLogging {
         f(serverStatus, mutator)
       }
     }
+    success
   }
 
   def storedStatus(): String = {
@@ -101,6 +105,8 @@ with TestLogging {
         case (name, expected) =>
           Status.unapply(name) mustEqual Some(expected)
       }
+      success
+
     }
 
     "handle unknown status" in {
@@ -113,6 +119,8 @@ with TestLogging {
       withServerStatus { (serverStatus, _) =>
         serverStatus.start() must throwA[Exception]
       }
+      success
+
     }
 
     "status" in {
@@ -120,6 +128,7 @@ with TestLogging {
         withServerStatus { (serverStatus, _) =>
           serverStatus.status mustEqual Quiescent
         }
+        success
       }
 
       "load previously stored status" in {
@@ -128,6 +137,8 @@ with TestLogging {
           val serverStatus = makeServerStatus()
           serverStatus.status mustEqual ReadOnly
         }
+        success
+
       }
 
       "switch to other statuses" in {
@@ -147,6 +158,7 @@ with TestLogging {
           serverStatus.markQuiescent()
           serverStatus.status mustEqual Quiescent
         }
+        success
       }
 
       "switch to other statuses by values" in {
@@ -166,6 +178,7 @@ with TestLogging {
           serverStatus.setStatus(Quiescent)
           serverStatus.status mustEqual Quiescent
         }
+        success
       }
 
       "switch to other statuses by names" in {
@@ -185,6 +198,7 @@ with TestLogging {
           serverStatus.setStatus("quiescent")
           serverStatus.status mustEqual Quiescent
         }
+        success
       }
 
       "not switch to invalid statuses" in {
@@ -197,6 +211,7 @@ with TestLogging {
 
           serverStatus.setStatus("trolling") must throwA[UnknownStatusException]
         }
+        success
       }
 
       "switch to dead on shutdown" in {
@@ -207,6 +222,7 @@ with TestLogging {
           serverStatus.shutdown()
           serverStatus.status mustEqual Down
         }
+        success
       }
 
       "store status after successful change" in {
@@ -215,6 +231,7 @@ with TestLogging {
           serverStatus.markUp()
           storedStatus() mustEqual "Up"
         }
+        success
       }
 
       "not store status after successful transient change" in {
@@ -225,6 +242,7 @@ with TestLogging {
           serverStatus.status == WriteAvoid
           storedStatus() mustEqual "Up"
         }
+        success
       }
 
       "not change status if previous change has not yet completed" in {
@@ -238,6 +256,7 @@ with TestLogging {
 
           serverStatus.setStatus(Quiescent) mustEqual Quiescent
         }
+        success
       }
 
       "not change status if proposed change is rejected" in {
@@ -257,6 +276,7 @@ with TestLogging {
           serverStatus.status mustEqual Quiescent
           storedStatus() mustEqual "Quiescent"
         }
+        success
       }
 
       "not store status after unsuccessful change" in {
@@ -275,6 +295,7 @@ with TestLogging {
           serverStatus.markUp() must throwA[RuntimeException]
           storedStatus() mustEqual "Quiescent"
         }
+        success
       }
 
       "not store dead status on shutdown" in {
@@ -286,6 +307,7 @@ with TestLogging {
           serverStatus.status mustEqual Down
           storedStatus() mustEqual "Up"
         }
+        success
       }
 
       "update stats on status change" in {
@@ -315,6 +337,7 @@ with TestLogging {
           Stats.getGauge("status/readable") mustEqual Some(0.0)
           Stats.getGauge("status/writeable") mustEqual Some(0.0)
         }
+        success
       }
     }
 
@@ -335,6 +358,7 @@ with TestLogging {
           serverStatus.blockWrites mustEqual false
           serverStatus.blockReads mustEqual false
         }
+        success
       }
 
       "block write operations when switching to ReadOnly, after a delay" in {
@@ -353,6 +377,7 @@ with TestLogging {
           serverStatus.blockWrites mustEqual true
           serverStatus.blockReads mustEqual false
         }
+        success
       }
 
       "block read/write operations when switching to Quiescent, with configured delay" in {
@@ -371,6 +396,7 @@ with TestLogging {
           serverStatus.blockWrites mustEqual true
           serverStatus.blockReads mustEqual true
         }
+        success
       }
 
       "block read/write operations when switching to Quiescent, without delay" in {
@@ -384,6 +410,7 @@ with TestLogging {
           serverStatus.blockWrites mustEqual true
           serverStatus.blockReads mustEqual true
         }
+        success
       }
 
       "revert blocked operations immediately after an unsuccessful change" in {
@@ -405,6 +432,7 @@ with TestLogging {
           serverStatus.blockWrites mustEqual true
           serverStatus.blockReads mustEqual false
         }
+        success
       }
 
       "immediately allow additional operations" in {
@@ -420,6 +448,7 @@ with TestLogging {
           serverStatus.blockWrites mustEqual false
           serverStatus.blockReads mustEqual false
         }
+        success
       }
     }
   }

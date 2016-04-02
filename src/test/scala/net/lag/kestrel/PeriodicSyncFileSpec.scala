@@ -23,26 +23,28 @@ import com.twitter.util.{Stopwatch, Duration}
 import java.nio.ByteBuffer
 import java.util.concurrent._
 import java.util.concurrent.atomic.AtomicInteger
-import org.specs.SpecificationWithJUnit
-import org.specs.matcher.Matcher
+import org.specs2.mutable._
+import org.specs2.matcher.Matcher
 
-class PeriodicSyncFileSpec extends SpecificationWithJUnit
+class PeriodicSyncFileSpec extends Specification
   with TestLogging
-  with QueueMatchers
 {
-  val scheduler = new ScheduledThreadPoolExecutor(4)
 
-  "PeriodicSyncTask" should {  
+  isolated
+
+  val scheduler: ScheduledThreadPoolExecutor = new ScheduledThreadPoolExecutor(4)
+
+  def cleanup = {
+    scheduler.shutdown()
+    scheduler.awaitTermination(5, TimeUnit.SECONDS)
+  }
+
+  "PeriodicSyncTask" should {
     val invocations = new AtomicInteger(0)
     val syncTask = new PeriodicSyncTask(scheduler, 0.milliseconds, 20.milliseconds) {
       override def run() {
         invocations.incrementAndGet
       }
-    }
-
-    doAfter {
-      scheduler.shutdown()
-      scheduler.awaitTermination(5, TimeUnit.SECONDS)
     }
 
     "only start once" in {
@@ -53,7 +55,7 @@ class PeriodicSyncFileSpec extends SpecificationWithJUnit
       syncTask.stop()
 
       val expectedInvocations = sw().inMilliseconds / 20
-      (invocations.get <= expectedInvocations * 3 / 2) mustBe true
+      (invocations.get <= expectedInvocations * 3 / 2) mustEqual true
     }
 
     "stop" in {
@@ -80,10 +82,12 @@ class PeriodicSyncFileSpec extends SpecificationWithJUnit
       val invocationsPostStop = invocations.get
       Thread.sleep(100)
 
-      (invocationsPreStop > 0) mustBe true                            // did something
-      (invocationsPostIgnoredStop > invocationsPreStop) mustBe true   // kept going
-      (invocationsPostStop >= invocationsPostIgnoredStop) mustBe true // maybe did more
+      (invocationsPreStop > 0) mustEqual true                            // did something
+      (invocationsPostIgnoredStop > invocationsPreStop) mustEqual true   // kept going
+      (invocationsPostStop >= invocationsPostIgnoredStop) mustEqual  true // maybe did more
       invocations.get mustEqual invocationsPostStop                   // stopped
     }
-  }  
+  }
+
+  step(cleanup)
 }

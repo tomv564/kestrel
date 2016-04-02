@@ -1,5 +1,5 @@
-namespace java net.lag.kestrel.thrift
-#@namespace scala net.lag.kestrel.thriftscala
+#namespace java net.lag.kestrel.thrift
+#@namespace scala net.lag.kestrel.thrift
 
 struct Item {
   /* the actual data */

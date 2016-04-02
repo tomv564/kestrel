@@ -23,10 +23,11 @@ import com.twitter.ostrich.admin.RuntimeEnvironment
 import com.twitter.util.{Await, Future, Promise, Time}
 import java.net.InetSocketAddress
 import org.jboss.netty.buffer.ChannelBuffers
-import org.specs.SpecificationWithJUnit
-import org.specs.mock.{ClassMocker, JMocker}
+import org.mockito.{Matchers => M}
+import org.specs2.mutable._
+import org.specs2.mock._
 
-class TextHandlerSpec extends SpecificationWithJUnit with JMocker with ClassMocker {
+class TextHandlerSpec extends Specification with Mockito {
   def wrap(s: String) = ChannelBuffers.wrappedBuffer(s.getBytes)
 
   type ClientDesc = Option[() => String]
@@ -88,17 +89,19 @@ class TextHandlerSpec extends SpecificationWithJUnit with JMocker with ClassMock
     val qitem = QItem(Time.now, None, "state shirt".getBytes, 23)
 
     "get request" in {
-      expect {
-        one(connection).remoteAddress willReturn new InetSocketAddress("", 0)
-      }
+      connection.remoteAddress returns new InetSocketAddress("", 0)
+//      expect {
+//        one(connection).remoteAddress willReturn new InetSocketAddress("", 0)
+//      }
 
       val textHandler = new TextHandler(connection, queueCollection, 10)
 
       "closes transactions" in {
-        expect {
-          one(queueCollection).remove(equal("test"), equal(None), equal(true), equal(false), any[ClientDesc]) willReturn Future.value(Some(qitem))
-          one(queueCollection).confirmRemove("test", 100)
-        }
+        queueCollection.remove(M.eq("test"), M.eq(None), M.eq(true), M.eq(false), any[ClientDesc]) returns Future.value(Some(qitem))
+//        expect {
+//          one(queueCollection).remove(equal("test"), equal(None), equal(true), equal(false), any[ClientDesc]) willReturn Future.value(Some(qitem))
+//          one(queueCollection).confirmRemove("test", 100)
+//        }
 
         textHandler.handler.pendingReads.add("test", 100)
         textHandler.handler.pendingReads.peek("test") mustEqual List(100)
@@ -109,9 +112,10 @@ class TextHandlerSpec extends SpecificationWithJUnit with JMocker with ClassMock
       "with timeout" in {
         "value ready immediately" in {
           Time.withCurrentTimeFrozen { time =>
-            expect {
-              one(queueCollection).remove(equal("test"), equal(Some(500.milliseconds.fromNow)), equal(true), equal(false), any[ClientDesc]) willReturn Future.value(Some(qitem))
-            }
+            queueCollection.remove(M.eq("test"), M.eq(Some(500.milliseconds.fromNow)), M.eq(true), M.eq(false), any[ClientDesc]) returns Future.value(Some(qitem))
+//            expect {
+//              one(queueCollection).remove(equal("test"), equal(Some(500.milliseconds.fromNow)), equal(true), equal(false), any[ClientDesc]) willReturn Future.value(Some(qitem))
+//            }
 
             Await.result(textHandler(TextRequest("get", List("test", "500"), Nil))) mustEqual ItemResponse(Some(qitem.data))
           }
@@ -120,10 +124,11 @@ class TextHandlerSpec extends SpecificationWithJUnit with JMocker with ClassMock
         "value ready eventually" in {
           Time.withCurrentTimeFrozen { time =>
             val promise = new Promise[Option[QItem]]
-
-            expect {
-              one(queueCollection).remove(equal("test"), equal(Some(500.milliseconds.fromNow)), equal(true), equal(false), any[ClientDesc]) willReturn promise
-            }
+            queueCollection.remove(M.eq("test"), M.eq(Some(500.milliseconds.fromNow)), M.eq(true), M.eq(false), any[ClientDesc]) returns promise
+//
+//            expect {
+//              one(queueCollection).remove(equal("test"), equal(Some(500.milliseconds.fromNow)), equal(true), equal(false), any[ClientDesc]) willReturn promise
+//            }
 
             val future = textHandler(TextRequest("get", List("test", "500"), Nil))
 
@@ -135,10 +140,12 @@ class TextHandlerSpec extends SpecificationWithJUnit with JMocker with ClassMock
         "timed out" in {
           Time.withCurrentTimeFrozen { time =>
             val promise = new Promise[Option[QItem]]
+            queueCollection.remove(M.eq("test"), M.eq(Some(500.milliseconds.fromNow)), M.eq(true), M.eq(false), any[ClientDesc]) returns promise
 
-            expect {
-              one(queueCollection).remove(equal("test"), equal(Some(500.milliseconds.fromNow)), equal(true), equal(false), any[ClientDesc]) willReturn promise
-            }
+//
+//            expect {
+//              one(queueCollection).remove(equal("test"), equal(Some(500.milliseconds.fromNow)), equal(true), equal(false), any[ClientDesc]) willReturn promise
+//            }
 
             val future = textHandler(TextRequest("get", List("test", "500"), Nil))
 
@@ -149,17 +156,21 @@ class TextHandlerSpec extends SpecificationWithJUnit with JMocker with ClassMock
       }
 
       "empty queue" in {
-        expect {
-          one(queueCollection).remove(equal("test"), equal(None), equal(true), equal(false), any[ClientDesc]) willReturn Future.value(None)
-        }
+        queueCollection.remove(M.eq("test"), M.eq(None), M.eq(true), M.eq(false), any[ClientDesc]) returns Future.value(None)
+
+//        expect {
+//          one(queueCollection).remove(equal("test"), equal(None), equal(true), equal(false), any[ClientDesc]) willReturn Future.value(None)
+//        }
 
         Await.result(textHandler(TextRequest("get", List("test"), Nil))) mustEqual ItemResponse(None)
       }
 
       "item ready" in {
-        expect {
-          one(queueCollection).remove(equal("test"), equal(None), equal(true), equal(false), any[ClientDesc]) willReturn Future.value(Some(qitem))
-        }
+        queueCollection.remove(M.eq("test"), M.eq(None), M.eq(true), M.eq(false), any[ClientDesc]) returns Future.value(Some(qitem))
+
+//        expect {
+//          one(queueCollection).remove(equal("test"), equal(None), equal(true), equal(false), any[ClientDesc]) willReturn Future.value(Some(qitem))
+//        }
 
         Await.result(textHandler(TextRequest("get", List("test"), Nil))) mustEqual ItemResponse(Some(qitem.data))
       }
@@ -167,10 +178,12 @@ class TextHandlerSpec extends SpecificationWithJUnit with JMocker with ClassMock
 
     "put request" in {
       Time.withCurrentTimeFrozen { timeMutator =>
-        expect {
-          one(connection).remoteAddress willReturn new InetSocketAddress("", 0)
-          one(queueCollection).add(equal("test"), equal("hello".getBytes), equal(None), equal(Time.now), any[ClientDesc]) willReturn true
-        }
+        connection.remoteAddress returns new InetSocketAddress("", 0)
+        queueCollection.add(M.eq("test"), M.eq("hello".getBytes), M.eq(None), M.eq(Time.now), any[ClientDesc]) returns true
+//        expect {
+//          one(connection).remoteAddress willReturn new InetSocketAddress("", 0)
+//          one(queueCollection).add(equal("test"), equal("hello".getBytes), equal(None), equal(Time.now), any[ClientDesc]) willReturn true
+//        }
 
         val textHandler = new TextHandler(connection, queueCollection, 10)
         Await.result(textHandler(TextRequest("put", List("test"), List("hello".getBytes)))) mustEqual CountResponse(1)
@@ -178,19 +191,24 @@ class TextHandlerSpec extends SpecificationWithJUnit with JMocker with ClassMock
     }
 
     "delete request" in {
-      expect {
-        one(connection).remoteAddress willReturn new InetSocketAddress("", 0)
-        one(queueCollection).delete(equal("test"), any[ClientDesc])
-      }
+      connection.remoteAddress returns new InetSocketAddress("", 0)
+//      queueCollection.delete("test",  any[ClientDesc]) returns true
+      //
+//      expect {
+//        one(connection).remoteAddress willReturn new InetSocketAddress("", 0)
+//        one(queueCollection).delete(equal("test"), any[ClientDesc])
+//      }
 
       val textHandler = new TextHandler(connection, queueCollection, 10)
       Await.result(textHandler(TextRequest("delete", List("test"), Nil))) mustEqual CountResponse(0)
     }
 
     "version request" in {
-      expect {
-        one(connection).remoteAddress willReturn new InetSocketAddress("", 0)
-      }
+      connection.remoteAddress returns new InetSocketAddress("", 0)
+
+//      expect {
+//        one(connection).remoteAddress willReturn new InetSocketAddress("", 0)
+//      }
 
       val runtime = RuntimeEnvironment(this, Array())
       Kestrel.runtime = runtime
@@ -201,9 +219,11 @@ class TextHandlerSpec extends SpecificationWithJUnit with JMocker with ClassMock
 
     "status request" in {
       "without server status" in {
-        expect {
-          one(connection).remoteAddress willReturn new InetSocketAddress("", 0)
-        }
+        connection.remoteAddress returns new InetSocketAddress("", 0)
+
+//        expect {
+//          one(connection).remoteAddress willReturn new InetSocketAddress("", 0)
+//        }
 
         val textHandler = new TextHandler(connection, queueCollection, 10)
 
@@ -218,26 +238,30 @@ class TextHandlerSpec extends SpecificationWithJUnit with JMocker with ClassMock
 
       "with server status" in {
         val serverStatus = mock[ServerStatus]
-
-        expect {
-          one(connection).remoteAddress willReturn new InetSocketAddress("", 0)
-        }
+        connection.remoteAddress returns new InetSocketAddress("", 0)
+//
+//        expect {
+//          one(connection).remoteAddress willReturn new InetSocketAddress("", 0)
+//        }
 
         val textHandler = new TextHandler(connection, queueCollection, 10, Some(serverStatus))
 
         "check status should return current status" in {
-          expect {
-            one(serverStatus).status willReturn Up
-          }
+          serverStatus.status returns Up
+//          expect {
+//            one(serverStatus).status willReturn Up
+//          }
           Await.result(textHandler(TextRequest("status", Nil, Nil))) mustEqual StringResponse("UP")
         }
 
         "set status should set current status" in {
-          expect {
+
+          Await.result(textHandler(TextRequest("status", List("ReadOnly"), Nil))) mustEqual CountResponse(0)
+
+          got {
             one(serverStatus).setStatus("ReadOnly")
           }
 
-          Await.result(textHandler(TextRequest("status", List("ReadOnly"), Nil))) mustEqual CountResponse(0)
         }
       }
     }

@@ -30,14 +30,14 @@ class FakeTimer extends Timer {
   var repeat: Option[Duration] = None
   var timeout: () => Unit = { () => }
 
-  def schedule(when: Time)(f: => Unit): TimerTask = {
+  def scheduleOnce(when: Time)(f: => Unit): TimerTask = {
     deadline = when
     repeat = None
     timeout = { () => f }
     timerTask
   }
 
-  def schedule(when: Time, period: Duration)(f: => Unit): TimerTask = {
+  def schedulePeriodically(when: Time, period: Duration)(f: => Unit): TimerTask = {
     deadline = when
     repeat = Some(period)
     timeout = { () => f }

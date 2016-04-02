@@ -26,19 +26,26 @@ import com.twitter.conversions.time._
 import com.twitter.ostrich.stats.Stats
 import com.twitter.logging.TestLogging
 import com.twitter.util.{Await, Duration, TempFolder, Time, Timer, TimerTask}
-import org.specs.SpecificationWithJUnit
-import org.specs.matcher.Matcher
+import org.specs2.mutable._
+import org.specs2.matcher.Matcher
 import config._
 
-class PersistentQueueSpec extends SpecificationWithJUnit
+class PersistentQueueSpec extends Specification
   with TempFolder
   with TestLogging
   with QueueMatchers
   with DumpJournal
+  with Before
 {
+  val timer = new FakeTimer()
+
+  def before = {
+    timer.timerTask.cancelled = false
+  }
+
   "PersistentQueue" should {
-    val timer = new FakeTimer()
     val scheduler = new ScheduledThreadPoolExecutor(1)
+
 
     def withJournalPacker(f: => Unit) {
       Journal.packer.start()
@@ -47,6 +54,7 @@ class PersistentQueueSpec extends SpecificationWithJUnit
       } finally {
         Journal.packer.shutdown()
       }
+      success
     }
 
     def interruptRewrites(name: String, failpoint: Failpoint): String = {
@@ -83,9 +91,6 @@ class PersistentQueueSpec extends SpecificationWithJUnit
       }
     }
 
-    doBefore {
-      timer.timerTask.cancelled = false
-    }
 
     "add and remove one item" in {
       withTempFolder {
@@ -117,6 +122,8 @@ class PersistentQueueSpec extends SpecificationWithJUnit
         q.close
         dumpJournal("work") mustEqual "add(11:0:hello kitty), remove"
       }
+      success
+
     }
 
     "resist adding an item that's too large" in {
@@ -132,6 +139,8 @@ class PersistentQueueSpec extends SpecificationWithJUnit
         q.add(new Array[Byte](129)) mustEqual false
         q.close
       }
+      success
+
     }
 
     "flush all items" in {
@@ -160,6 +169,8 @@ class PersistentQueueSpec extends SpecificationWithJUnit
         dumpJournal("work") mustEqual
           "add(5:0:alpha), add(4:0:beta), add(5:0:gamma), remove, remove, remove"
       }
+      success
+
     }
 
     "rotate journals when they exceed maxMemorySize" in {
@@ -179,6 +190,8 @@ class PersistentQueueSpec extends SpecificationWithJUnit
         q.add(new Array[Byte](32))
         JournalTestUtil.journalsForQueue(new File(folderName), "rotating").length mustEqual 2
       }
+      success
+
     }
 
     "rotate and pack journals" in {
@@ -211,6 +224,8 @@ class PersistentQueueSpec extends SpecificationWithJUnit
           verifyQLengthAndDumpJournal(q2, queueName, 16)
         }
       }
+      success
+
     }
 
     "rotate and pack journals and then recover" in {
@@ -254,6 +269,8 @@ class PersistentQueueSpec extends SpecificationWithJUnit
           verifyQLengthAndDumpJournal(q3, queueName, 16)
         }
       }
+      success
+
     }
 
     "rotate pack journals with remove tentative and then recover" in {
@@ -298,6 +315,8 @@ class PersistentQueueSpec extends SpecificationWithJUnit
           verifyQLengthAndDumpJournal(q3, queueName, 16)
         }
       }
+      success
+
     }
 
     "rewrite journals when they exceed the defaultJournalSize and are empty" in {
@@ -313,21 +332,23 @@ class PersistentQueueSpec extends SpecificationWithJUnit
         q.length mustEqual 2
         q.putItems.get mustEqual 2L
         q.bytes mustEqual 32 + 64
-        (q.journalTotalSize > 96) mustBe true
+        (q.journalTotalSize > 96) mustEqual true
 
         q.remove()
         q.length mustEqual 1
         q.putItems.get mustEqual 2L
         q.bytes mustEqual 64
-        (q.journalTotalSize > 96) mustBe true
+        (q.journalTotalSize > 96) mustEqual true
 
         // now it should rotate:
         q.remove()
         q.length mustEqual 0
         q.putItems.get mustEqual 2L
         q.bytes mustEqual 0
-        (q.journalTotalSize < 10) mustBe true
+        (q.journalTotalSize < 10) mustEqual true
       }
+      success
+
     }
 
     "rewrite journals with an open transaction" in {
@@ -343,13 +364,13 @@ class PersistentQueueSpec extends SpecificationWithJUnit
         q.length mustEqual 2
         q.putItems.get mustEqual 2
         q.bytes mustEqual 32 + 64
-        (q.journalSize > 96) mustBe true
+        (q.journalSize > 96) mustEqual true
 
         q.remove()
         q.length mustEqual 1
         q.putItems.get mustEqual 2
         q.bytes mustEqual 64
-        (q.journalSize > 96) mustBe true
+        (q.journalSize > 96) mustEqual true
 
         // now it should rotate:
         q.remove(true)
@@ -357,8 +378,10 @@ class PersistentQueueSpec extends SpecificationWithJUnit
         q.openTransactionCount mustEqual 1
         q.putItems.get mustEqual 2
         q.bytes mustEqual 0
-        (q.journalSize < 96) mustBe true
+        (q.journalSize < 96) mustEqual true
       }
+      success
+
     }
 
     "timeout open transactions" in {
@@ -402,6 +425,8 @@ class PersistentQueueSpec extends SpecificationWithJUnit
           new String(item7.get.data) mustEqual "three"
         }
       }
+      success
+
     }
 
 
@@ -419,8 +444,10 @@ class PersistentQueueSpec extends SpecificationWithJUnit
 
         q.remove(false)
         q.length mustEqual 1
-        (q.journalSize < 128) mustBe true
+        (q.journalSize < 128) mustEqual true
       }
+      success
+
     }
 
     "not rewrite journals repeatedly on add" in {
@@ -442,6 +469,8 @@ class PersistentQueueSpec extends SpecificationWithJUnit
         q.add(new Array[Byte](1))
         q.totalRewrites() mustEqual 1
       }
+      success
+
     }
 
     "allow rewrites after some time" in {
@@ -472,6 +501,8 @@ class PersistentQueueSpec extends SpecificationWithJUnit
           q.totalRewrites() mustEqual 2
         }
       }
+      success
+
     }
 
     "allow rewrites for empty queue after some time" in {
@@ -510,6 +541,8 @@ class PersistentQueueSpec extends SpecificationWithJUnit
           q.totalRewrites() mustEqual 2
         }
       }
+      success
+
     }
 
     "continue aggressive rewrites for empty queue if rewrite frees up space" in {
@@ -540,6 +573,8 @@ class PersistentQueueSpec extends SpecificationWithJUnit
           q.totalRewrites() mustEqual 2
         }
       }
+      success
+
     }
 
 
@@ -575,6 +610,8 @@ class PersistentQueueSpec extends SpecificationWithJUnit
           timer.timeout()
         }
       }
+      success
+
     }
 
 
@@ -601,6 +638,8 @@ class PersistentQueueSpec extends SpecificationWithJUnit
         q3.journalSize mustEqual 5 + 6 + 16 + 16 + 5 + 5 + 1 + 1
         q3.length mustEqual 0
       }
+      success
+
     }
 
     "recover a journal with a rewritten transaction" in {
@@ -628,18 +667,24 @@ class PersistentQueueSpec extends SpecificationWithJUnit
         q2.close()
         dumpJournal("rolling") mustEqual "add(5:0:first), remove-tentative(2), add(6:0:second), confirm-remove(2), remove"
       }
+      success
+
     }
 
     "recover a journal with a incomplete rewrite fail before pack" in {
       withTempFolder {
         interruptRewrites("incomplete-rewrite-1", Failpoint.RewriteFPBeforePack) mustEqual "add(4:0:zero), add(5:0:first), add(6:0:second), remove-tentative(1), confirm-remove(1), remove-tentative(2), unremove(2), remove, remove"
       }
+      success
+
     }
 
     "recover a journal with a incomplete rewrite fail after delete" in {
       withTempFolder {
         interruptRewrites("incomplete-rewrite-3", Failpoint.RewriteFPAfterDelete) mustEqual "add(5:0:first), remove-tentative(2), add(6:0:second), unremove(2), remove, remove"
       }
+      success
+
     }
 
     "rewrite empty queue on graceful shutdown" in {
@@ -656,6 +701,8 @@ class PersistentQueueSpec extends SpecificationWithJUnit
         q2.setup()
         dumpJournal("gracefulshutdownempty") mustEqual ""
       }
+      success
+
     }
 
     "not write non-empty queue on graceful shutdown" in {
@@ -672,6 +719,8 @@ class PersistentQueueSpec extends SpecificationWithJUnit
         dumpJournal("gracefulshutdownnonempty") mustEqual "add(5:0:first), add(6:0:second), remove"
         new String(q2.remove().get.data) mustEqual "second"
       }
+      success
+
     }
 
     "rewrite empty queue with open transactions on graceful shutdown" in {
@@ -692,6 +741,8 @@ class PersistentQueueSpec extends SpecificationWithJUnit
         q2.setup()
         dumpJournal("gracefulshutdownopentran") mustEqual "add(6:0:second), remove-tentative(2), unremove(2)"
       }
+      success
+
     }
 
     "honor max_age" in {
@@ -718,6 +769,8 @@ class PersistentQueueSpec extends SpecificationWithJUnit
           q.remove mustEqual None
         }
       }
+      success
+
     }
 
     "allow max_journal_size and max_memory_size to be overridden per queue" in {
@@ -735,6 +788,8 @@ class PersistentQueueSpec extends SpecificationWithJUnit
         q2.config.maxJournalSize mustEqual 123.bytes
         q2.config.maxMemorySize mustEqual new QueueBuilder().apply().maxMemorySize
       }
+      success
+
     }
 
     "handle timeout reads" in {
@@ -758,6 +813,8 @@ class PersistentQueueSpec extends SpecificationWithJUnit
           q.add("hello".getBytes)
           rv mustEqual Some("hello")
         }
+        success
+
       }
 
       "timeout" in {
@@ -780,6 +837,8 @@ class PersistentQueueSpec extends SpecificationWithJUnit
           timer.timeout()
           rv mustEqual None
         }
+        success
+
       }
 
       "really long timeout is cancelled" in {
@@ -803,6 +862,8 @@ class PersistentQueueSpec extends SpecificationWithJUnit
             q.waiterCount mustEqual 0
             timer.timerTask.cancelled mustEqual true
           }
+          success
+
         }
 
         "when the connection dies" in {
@@ -822,6 +883,8 @@ class PersistentQueueSpec extends SpecificationWithJUnit
             q.waiterCount mustEqual 0
             timer.timerTask.cancelled mustEqual true
           }
+          success
+
         }
       }
     }
@@ -873,6 +936,8 @@ class PersistentQueueSpec extends SpecificationWithJUnit
         q2.length mustEqual 0
         q2.bytes mustEqual 0
       }
+      success
+
     }
 
     "recover a journal with open transactions" in {
@@ -908,6 +973,8 @@ class PersistentQueueSpec extends SpecificationWithJUnit
         new String(q2.remove.get.data) mustEqual "five"
         q2.length mustEqual 0
       }
+      success
+
     }
 
     "continue a queue item" in {
@@ -929,6 +996,8 @@ class PersistentQueueSpec extends SpecificationWithJUnit
         new String(q2.remove.get.data) mustEqual "two"
         q2.length mustEqual 0
       }
+      success
+
     }
 
     "recreate the journal file when it gets too big" in {
@@ -957,6 +1026,8 @@ class PersistentQueueSpec extends SpecificationWithJUnit
         q.close
         dumpJournal("things") mustEqual "add(512:0)"
       }
+      success
+
     }
 
     "don't recreate the journal file if the queue itself is still huge" in {
@@ -974,6 +1045,8 @@ class PersistentQueueSpec extends SpecificationWithJUnit
         q.bytes mustEqual 4096
         q.journalSize must be_<(q.journalTotalSize)
       }
+      success
+
     }
 
     "report an age of zero on an empty queue" in {
@@ -986,6 +1059,8 @@ class PersistentQueueSpec extends SpecificationWithJUnit
         q.length mustEqual 0
         q.currentAge mustEqual 0.milliseconds
       }
+      success
+
     }
 
     "report the age of the queue in the absence of gets" in {
@@ -1004,6 +1079,8 @@ class PersistentQueueSpec extends SpecificationWithJUnit
           q.currentAge mustEqual 20.milliseconds
         }
       }
+      success
+
     }
 
     "remove all stats" in {
@@ -1033,6 +1110,8 @@ class PersistentQueueSpec extends SpecificationWithJUnit
         val statNamesAfter = stats("things")
         statNamesAfter must beEmpty
       }
+      success
+
     }
 
     "get oldest add time" in {
@@ -1049,6 +1128,8 @@ class PersistentQueueSpec extends SpecificationWithJUnit
 
         q.close
       }
+      success
+
     }
   }
 
@@ -1066,9 +1147,11 @@ class PersistentQueueSpec extends SpecificationWithJUnit
         q.setup
 
         q.add("coffee".getBytes)
-        new File(folderName, "mem").exists mustBe false
+        new File(folderName, "mem").exists mustEqual false
         q.remove must beSomeQItem("coffee")
       }
+      success
+
     }
 
     "lose all data after being destroyed" in {
@@ -1085,6 +1168,8 @@ class PersistentQueueSpec extends SpecificationWithJUnit
         q2.setup
         q2.remove mustEqual None
       }
+      success
+
     }
   }
 
@@ -1105,6 +1190,8 @@ class PersistentQueueSpec extends SpecificationWithJUnit
         q.length mustEqual 1
         q.remove must beSomeQItem("sunny")
       }
+      success
+
     }
 
     "honor max_size" in {
@@ -1121,6 +1208,8 @@ class PersistentQueueSpec extends SpecificationWithJUnit
         q.bytes mustEqual 512
         q.remove must beSomeQItem("a" * 256)
       }
+      success
+
     }
 
     "drop older items when discard_old_when_full is set" in {
@@ -1138,6 +1227,8 @@ class PersistentQueueSpec extends SpecificationWithJUnit
         q.length mustEqual 3
         q.remove must beSomeQItem("rainy")
       }
+      success
+
     }
   }
 
@@ -1176,6 +1267,8 @@ class PersistentQueueSpec extends SpecificationWithJUnit
           q.isReadyForExpiration mustEqual true
         }
       }
+      success
+
     }
   }
 
@@ -1202,6 +1295,8 @@ class PersistentQueueSpec extends SpecificationWithJUnit
           q.remove must beSomeQItem("raekwon")
         }
       }
+      success
+
     }
 
     "expire items into a queue" in {
@@ -1232,6 +1327,8 @@ class PersistentQueueSpec extends SpecificationWithJUnit
           r.remove must beSomeQItem("u-god")
         }
       }
+      success
+
     }
 
     "expire over maxExpireSweep number of items" in {
@@ -1273,6 +1370,8 @@ class PersistentQueueSpec extends SpecificationWithJUnit
           r.remove must beSomeQItem("geso")
         }
       }
+      success
+
     }
 
     "whitelisted queues should disallow reads when clientId is not specified" in {
@@ -1291,7 +1390,7 @@ class PersistentQueueSpec extends SpecificationWithJUnit
         try {
           r.remove(true)
         } catch {
-          case e:Exception => e.isInstanceOf[AvailabilityException] mustBe true
+          case e:Exception => e.isInstanceOf[AvailabilityException] mustEqual true
         }
 
         r.length mustEqual 2
@@ -1299,13 +1398,15 @@ class PersistentQueueSpec extends SpecificationWithJUnit
         try {
           r.remove(false)
         } catch {
-          case e:Exception => e.isInstanceOf[AvailabilityException] mustBe true
+          case e:Exception => e.isInstanceOf[AvailabilityException] mustEqual true
         }
 
         r.length mustEqual 2
 
 
       }
+      success
+
     }
 
     "whitelisted queues should disallow writes when clientId is not specified" in {
@@ -1321,7 +1422,7 @@ class PersistentQueueSpec extends SpecificationWithJUnit
         try {
           r.add("one".getBytes)
         } catch {
-          case e:Exception => e.isInstanceOf[AvailabilityException] mustBe true
+          case e:Exception => e.isInstanceOf[AvailabilityException] mustEqual true
         }
 
         r.length mustEqual 0
@@ -1329,9 +1430,11 @@ class PersistentQueueSpec extends SpecificationWithJUnit
         try {
           r.remove()
         } catch {
-          case _ => false mustBe true
+          case _ : Throwable => false mustEqual true
         }
       }
+      success
+
     }
   }
 
@@ -1360,7 +1463,9 @@ class PersistentQueueSpec extends SpecificationWithJUnit
       // future must not throw
       val futureWrite = q.addDurable("artisanal matcha".getBytes) 
       futureWrite.isDefined mustEqual true
-      Await.result(futureWrite.get, 30.seconds) 
+      Await.result(futureWrite.get, 30.seconds)
+      success
+
     }
 
     "succeed immediately for immediately completed future" in {
@@ -1373,7 +1478,9 @@ class PersistentQueueSpec extends SpecificationWithJUnit
       // future must not throw
       val futureWrite = q.addDurable("non fat double chocolate chip frappuccino".getBytes) 
       futureWrite.isDefined mustEqual true
-      Await.result(futureWrite.get, Duration.Bottom) 
+      Await.result(futureWrite.get, Duration.Bottom)
+      success
+
     }
   }
 }

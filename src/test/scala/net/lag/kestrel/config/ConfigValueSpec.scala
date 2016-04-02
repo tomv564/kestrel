@@ -16,7 +16,7 @@
 
 package net.lag.kestrel.config
 
-import org.specs.SpecificationWithJUnit
+import org.specs2.mutable._
 
 class ConfigValueSpec extends SpecificationWithJUnit {
   "Default" should {

@@ -27,10 +27,10 @@ import com.twitter.logging.{Logger, TestLogging}
 import com.twitter.ostrich.admin.RuntimeEnvironment
 import com.twitter.util.{TempFolder, Time}
 import org.scalatest.concurrent.Eventually
-import org.specs.SpecificationWithJUnit
+import org.specs2.mutable._
 import config._
 
-class ServerSpec extends SpecificationWithJUnit with TempFolder with TestLogging with Eventually {
+class ServerSpec extends Specification with TempFolder with TestLogging with After {
   val PORT = 22199
   var kestrel: Kestrel = null
 
@@ -58,14 +58,17 @@ class ServerSpec extends SpecificationWithJUnit with TempFolder with TestLogging
     kestrel.start()
   }
 
-
+  def after = {
+    kestrel.shutdown()
+    kestrel = null
+  }
   // Flaky test, see https://jira.twitter.biz/browse/PUBSUB-1931
   if (!sys.props.contains("SKIP_FLAKY"))
   "Server" should {
-    doAfter {
-      kestrel.shutdown()
-      kestrel = null
-    }
+//    doAfter {
+//      kestrel.shutdown()
+//      kestrel = null
+//    }
 
     "configure per-queue" in {
       withTempFolder {
@@ -77,6 +80,8 @@ class ServerSpec extends SpecificationWithJUnit with TempFolder with TestLogging
         weatherUpdates.config.maxItems mustEqual 1500000
         weatherUpdates.config.maxAge mustEqual Some(1800.seconds)
       }
+      success
+
     }
 
     "reload" in {
@@ -96,6 +101,8 @@ class ServerSpec extends SpecificationWithJUnit with TempFolder with TestLogging
         starship.config.maxItems mustEqual 50
         weatherUpdates.config.maxItems mustEqual 9999
       }
+      success
+
     }
 
     "set and get one entry" in {
@@ -108,6 +115,8 @@ class ServerSpec extends SpecificationWithJUnit with TempFolder with TestLogging
         client.get("test_one_entry") mustEqual v.toString
         client.get("test_one_entry") mustEqual ""
       }
+      success
+
     }
 
     "set with expiry" in {
@@ -123,6 +132,8 @@ class ServerSpec extends SpecificationWithJUnit with TempFolder with TestLogging
           client.get("test_set_with_expiry") mustEqual v.toString
         }
       }
+      success
+
     }
 
     "set and get binary data" in {
@@ -138,6 +149,7 @@ class ServerSpec extends SpecificationWithJUnit with TempFolder with TestLogging
           new ObjectInputStream(new ByteArrayInputStream(newBuffer)).readObject() mustEqual encodedObject
         }
       }
+      success
     }
 
     "commit a transactional get" in {
@@ -176,6 +188,7 @@ class ServerSpec extends SpecificationWithJUnit with TempFolder with TestLogging
         stats("queue_commit_total_items") mustEqual "1"
         stats("queue_commit_bytes") mustEqual "0"
       }
+      success
     }
 
     "abort a transactional get" in {
@@ -207,6 +220,7 @@ class ServerSpec extends SpecificationWithJUnit with TempFolder with TestLogging
         stats("queue_abort_total_items") mustEqual "1"
         stats("queue_abort_bytes") mustEqual v.toString.length.toString
       }
+      success
     }
 
     "auto-rollback a transaction on disconnect" in {
@@ -242,6 +256,7 @@ class ServerSpec extends SpecificationWithJUnit with TempFolder with TestLogging
         stats("queue_auto-rollback_total_items") mustEqual "1"
         stats("queue_auto-rollback_bytes") mustEqual "0"
       }
+      success
     }
 
     "handoff an item in the face of disconnected clients" in {
@@ -269,6 +284,7 @@ class ServerSpec extends SpecificationWithJUnit with TempFolder with TestLogging
         // after failing to deliver to the disconnected client, should show up on #2:
         getClient2.finishGet() mustEqual "here i am JH"
       }
+      success
     }
 
     // open a transaction, do a long blocking read, disconnect, and make sure the item is available immediately.
@@ -292,6 +308,7 @@ class ServerSpec extends SpecificationWithJUnit with TempFolder with TestLogging
           getClient2.get("slow/open") mustEqual "item"
         }
       }
+      success
     }
 
     "cancel the timer for a long-poll on disconnect" in {
@@ -307,6 +324,7 @@ class ServerSpec extends SpecificationWithJUnit with TempFolder with TestLogging
         client.disconnect()
         kestrel.queueCollection.queue("slow").get.waiterCount must eventually(be_==(0))
       }
+      success
     }
 
     "auto-commit cycles of transactional gets" in {
@@ -333,6 +351,7 @@ class ServerSpec extends SpecificationWithJUnit with TempFolder with TestLogging
         stats("queue_auto-commit_total_items") mustEqual "3"
         stats("queue_auto-commit_bytes") mustEqual "0"
       }
+      success
     }
 
     "age" in {
@@ -348,6 +367,7 @@ class ServerSpec extends SpecificationWithJUnit with TempFolder with TestLogging
           //client.stats()("queue_test_age_age").toInt >= 1000 mustEqual true
         }
       }
+      success
     }
 
     "peek" in {
@@ -364,6 +384,7 @@ class ServerSpec extends SpecificationWithJUnit with TempFolder with TestLogging
         client2.get("testy") mustEqual "nibbler"
         client2.get("testy") mustEqual ""
       }
+      success
     }
 
     "rotate logs" in {
@@ -388,6 +409,7 @@ class ServerSpec extends SpecificationWithJUnit with TempFolder with TestLogging
         new File(folderName + "/test_log_rotation").length mustEqual 0
         new File(folderName).listFiles.length mustEqual 1
       }
+      success
     }
 
     "collect stats" in {
@@ -401,6 +423,7 @@ class ServerSpec extends SpecificationWithJUnit with TempFolder with TestLogging
                                "bytes_read")
         for (key <- basicStats) { stats contains key mustEqual true }
       }
+      success
     }
 
     "return a valid response for an unknown command" in {
@@ -408,6 +431,7 @@ class ServerSpec extends SpecificationWithJUnit with TempFolder with TestLogging
         makeServer()
         new TestClient("localhost", PORT).add("cheese", "swiss") mustEqual "CLIENT_ERROR"
       }
+      success
     }
 
     "disconnect and reconnect correctly" in {
@@ -420,6 +444,7 @@ class ServerSpec extends SpecificationWithJUnit with TempFolder with TestLogging
         client.connect
         client.get("disconnecting") mustEqual v.toString
       }
+      success
     }
 
     "flush expired items" in {
@@ -452,6 +477,7 @@ class ServerSpec extends SpecificationWithJUnit with TempFolder with TestLogging
           **/
         }
       }
+      success
     }
 
     // Flaky test, see https://jira.twitter.biz/browse/AWESOME-7917
@@ -475,6 +501,7 @@ class ServerSpec extends SpecificationWithJUnit with TempFolder with TestLogging
         client.get("weather_updates") mustEqual "dark and stormy"
         client.get("starship") mustEqual "dark and stormy"
       }
+      success
     }
 
     "use configured aliases" in {
@@ -484,6 +511,7 @@ class ServerSpec extends SpecificationWithJUnit with TempFolder with TestLogging
         client.set("wx_updates", "sunny and mild", 1)
         client.get("weather_updates") mustEqual "sunny and mild"
       }
+      success
     }
 
   }

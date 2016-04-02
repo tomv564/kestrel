@@ -163,7 +163,7 @@ class ServerStatus(val statusStore: PersistentMetadataStore, val timer: Timer, v
       } else {
         log.warning("%s change from '%s' to '%s' rejected", statusLabel, oldStatus, newStatus)
       }
-    } catch { case e =>
+    } catch { case e: Throwable =>
       log.error(e, "unable to update %s from '%s' to '%s'", statusLabel, oldStatus, newStatus)
       timerTask.foreach { task =>
         task.cancel()
@@ -265,7 +265,7 @@ class ServerStatus(val statusStore: PersistentMetadataStore, val timer: Timer, v
       val statusName =
         try {
           statusStore.readMetadata
-        } catch { case e =>
+        } catch { case e: Throwable =>
           log.error(e, "unable to read stored %s at '%s'; status remains '%s'", statusLabel, statusStore, currentStatus)
           defaultStatus.toString
         }

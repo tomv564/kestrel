@@ -18,7 +18,7 @@ package net.lag.kestrel.config
 
 import com.twitter.conversions.time._
 import com.twitter.conversions.storage._
-import org.specs.SpecificationWithJUnit
+import org.specs2.mutable._
 
 class QueueConfigSpec extends SpecificationWithJUnit {
   "QueueBuilder" should {

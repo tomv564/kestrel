@@ -22,37 +22,37 @@ import java.util.concurrent.ScheduledThreadPoolExecutor
 import scala.collection.mutable
 import scala.util.Sorting
 import com.twitter.conversions.time._
-import com.twitter.logging.TestLogging
+//import com.twitter.logging.TestLogging
 import com.twitter.ostrich.stats.Stats
 import com.twitter.util.{Await, TempFolder, Time, Timer}
-import org.scalatest.concurrent.Eventually
-import org.specs.SpecificationWithJUnit
-import org.specs.matcher.Matcher
-import org.specs.mock.{ClassMocker, JMocker}
+//import org.scalatest.concurrent.Eventually
+import org.specs2.mutable._
+import org.specs2.matcher.{SomeMatcher, Matcher}
+import org.specs2.mock._
 import config._
 
 class FakeKestrelHandler(queues: QueueCollection, maxOpenTransactions: Int,
                          serverStatus: Option[ServerStatus] = None)
   extends KestrelHandler(queues, maxOpenTransactions, () => "none", 0, serverStatus) with SimplePendingReads
 
-class KestrelHandlerSpec extends SpecificationWithJUnit with JMocker with ClassMocker with TempFolder with TestLogging with Eventually {
+class KestrelHandlerSpec extends Specification with Mockito with TempFolder with After {
   val config = new QueueBuilder().apply()
 
-  case class beString(expected: String) extends Matcher[Option[QItem]]() {
-    def apply(v: => Option[QItem]) = {
-      val actual = v.map { item => new String(item.data) }
-      (actual == Some(expected), "ok", "item " + actual + " != " + expected)
-    }
-  }
+  def beString(expected: String) = SomeMatcher[QItem].which(q => new String(q.data) == expected)
+//  case class beString(expected: String) extends Matcher[Option[QItem]]() {
+//    def apply(v: => Option[QItem]) = {
+//      val actual = v.map { item => new String(item.data) }
+//      (actual == Some(expected), "ok", "item " + actual + " != " + expected)
+//    }
+//  }
+
+  var queues: QueueCollection = null
+  val timer = new FakeTimer()
+  val scheduler = new ScheduledThreadPoolExecutor(1)
+
+  def after = queues.shutdown()
 
   "KestrelHandler" should {
-    var queues: QueueCollection = null
-    val timer = new FakeTimer()
-    val scheduler = new ScheduledThreadPoolExecutor(1)
-
-    doAfter {
-      queues.shutdown()
-    }
 
     "set and get" in {
       withTempFolder {
@@ -63,6 +63,8 @@ class KestrelHandlerSpec extends SpecificationWithJUnit with JMocker with ClassM
         Await.result(handler.getItem("test", None, false, false)) must beString("one")
         Await.result(handler.getItem("test", None, false, false)) must beString("two")
       }
+      success
+
     }
 
     "track stats" in {
@@ -96,6 +98,8 @@ class KestrelHandlerSpec extends SpecificationWithJUnit with JMocker with ClassM
         Stats.getCounter("cmd_monitor")() mustEqual 0
         Stats.getCounter("cmd_monitor_get")() mustEqual 0
       }
+      success
+
     }
 
     "track monitor stats" in {
@@ -152,6 +156,8 @@ class KestrelHandlerSpec extends SpecificationWithJUnit with JMocker with ClassM
         Stats.getCounter("get_hits")() mustEqual 3
         Stats.getCounter("get_misses")() mustEqual 2
       }
+      success
+
     }
 
     "abort and confirm a read" in {
@@ -166,6 +172,8 @@ class KestrelHandlerSpec extends SpecificationWithJUnit with JMocker with ClassM
         handler.closeRead("test") mustEqual true
         Await.result(handler.getItem("test", None, true, false)) mustEqual None
       }
+      success
+
     }
 
     "abort reads on a deleted queue without resurrecting the queue" in {
@@ -180,6 +188,8 @@ class KestrelHandlerSpec extends SpecificationWithJUnit with JMocker with ClassM
         handler.abortRead("test")
         queues.queueNames mustEqual Nil
       }
+      success
+
     }
 
     "abort waiters" in {
@@ -196,6 +206,7 @@ class KestrelHandlerSpec extends SpecificationWithJUnit with JMocker with ClassM
         handler.finish()
         eventually { Stats.getGauge("q/test/waiters") mustEqual Some(0.0) }
       }
+      success
     }
 
     "open several reads" in {
@@ -215,6 +226,8 @@ class KestrelHandlerSpec extends SpecificationWithJUnit with JMocker with ClassM
           handler.abortRead("test") mustEqual true
           Await.result(handler.getItem("test", None, true, false)) must beString("one")
         }
+        success
+
       }
 
       "on several queues" in {
@@ -244,6 +257,8 @@ class KestrelHandlerSpec extends SpecificationWithJUnit with JMocker with ClassM
           Await.result(handler.getItem("blue", None, true, false)) must beString("blue2")
           Await.result(handler.getItem("green", None, true, false)) must beString("green1")
         }
+        success
+
       }
 
       "but not if open reads are limited" in {
@@ -255,6 +270,8 @@ class KestrelHandlerSpec extends SpecificationWithJUnit with JMocker with ClassM
           Await.result(handler.getItem("red", None, true, false)) must beString("red1")
           Await.result(handler.getItem("red", None, true, false)) must throwA[TooManyOpenReadsException]
         }
+        success
+
       }
 
       "obey maxItems" in {
@@ -270,6 +287,8 @@ class KestrelHandlerSpec extends SpecificationWithJUnit with JMocker with ClassM
           }
           got.toList.map { x => new String(x.data) } mustEqual List("red1", "red2")
         }
+        success
+
       }
 
       "close all reads" in {
@@ -284,6 +303,8 @@ class KestrelHandlerSpec extends SpecificationWithJUnit with JMocker with ClassM
           handler.abortRead("red") mustEqual false
           handler.pendingReads.size("red") mustEqual 0
         }
+        success
+
       }
     }
 
@@ -292,20 +313,23 @@ class KestrelHandlerSpec extends SpecificationWithJUnit with JMocker with ClassM
         withTempFolder {
           queues = new QueueCollection(folderName, timer, scheduler, config, Nil, Nil)
           val serverStatus = mock[ServerStatus]
+          serverStatus.status returns Quiescent
           val handler = new FakeKestrelHandler(queues, 10, Some(serverStatus))
 
-          expect {
-            one(serverStatus).markQuiescent()
-            one(serverStatus).status willReturn Quiescent
-            one(serverStatus).setStatus("ReadOnly")
-            one(serverStatus).markUp()
-          }
+//          expect {
+//            one(serverStatus).markQuiescent()
+//            one(serverStatus).status willReturn Quiescent
+//            one(serverStatus).setStatus("ReadOnly")
+//            one(serverStatus).markUp()
+//          }
 
           handler.markQuiescecent()
           handler.currentStatus mustEqual "Quiescent"
           handler.setStatus("ReadOnly")
           handler.markUp()
         }
+        success
+
       }
 
       "by throwing an exception if server status not configured" in {
@@ -315,6 +339,8 @@ class KestrelHandlerSpec extends SpecificationWithJUnit with JMocker with ClassM
 
           handler.markQuiescecent() must throwA[ServerStatusNotConfiguredException]
         }
+        success
+
       }
     }
 
@@ -323,26 +349,32 @@ class KestrelHandlerSpec extends SpecificationWithJUnit with JMocker with ClassM
         withTempFolder {
           queues = new QueueCollection(folderName, timer, scheduler, config, Nil, Nil)
           val serverStatus = mock[ServerStatus]
+          serverStatus.blockReads returns true
           val handler = new FakeKestrelHandler(queues, 10, Some(serverStatus))
-          expect {
-            one(serverStatus).blockReads willReturn true
-          }
+//          expect {
+//            one(serverStatus).blockReads willReturn true
+//          }
 
           handler.getItem("q", None, false, false) must throwAn[AvailabilityException]
         }
+        success
+
       }
 
       "by blocking set when writes are blocked" in  {
         withTempFolder {
           queues = new QueueCollection(folderName, timer, scheduler, config, Nil, Nil)
           val serverStatus = mock[ServerStatus]
+          serverStatus.blockWrites returns true
           val handler = new FakeKestrelHandler(queues, 10, Some(serverStatus))
-          expect {
-            one(serverStatus).blockWrites willReturn true
-          }
+//          expect {
+//            one(serverStatus).blockWrites willReturn true
+//          }
 
           handler.setItem("q", 0, None, Array[Byte](1,2,3,4)) must throwAn[AvailabilityException]
         }
+        success
+
       }
     }
   }

@@ -24,11 +24,12 @@ import com.twitter.ostrich.admin.RuntimeEnvironment
 import com.twitter.util.{Await, Future, Promise, Time}
 import java.net.InetSocketAddress
 import java.nio.ByteBuffer
-import org.specs.SpecificationWithJUnit
-import org.specs.mock.{ClassMocker, JMocker}
+import org.mockito.{Matchers => M}
+import org.specs2.mutable._
+import org.specs2.mock._
 import scala.collection.mutable
 
-class MemcacheHandlerSpec extends SpecificationWithJUnit with JMocker with ClassMocker {
+class MemcacheHandlerSpec extends Specification with Mockito {
   type ClientDesc = Option[() => String]
 
   "MemcacheHandler" should {
@@ -55,33 +56,38 @@ class MemcacheHandlerSpec extends SpecificationWithJUnit with JMocker with Class
     val clientErrorResponse = MemcacheResponse("CLIENT_ERROR", None)
 
     "get request (transactional)" in {
-      expect {
-        1.atLeastOf(connection).remoteAddress willReturn address
-      }
+//      expect {
+//        1.atLeastOf(connection).remoteAddress willReturn address
+//      }
+      connection.remoteAddress returns address
 
       val memcacheHandler = new MemcacheHandler(connection, queueCollection, 10)
 
       "closes transactions" in {
-        expect {
-          one(queueCollection).confirmRemove("test", 100)
-          one(queueCollection).remove(equal("test"), equal(None), equal(true), equal(false), any[ClientDesc]) willReturn Future.value(Some(qitem))
-        }
+//        queueCollection.remove(equals("test"), equals(None), equals(true), equals(false), any[ClientDesc]) returns Future.value(Some(qitem))
+        queueCollection.remove(M.eq("test"), M.eq(None), M.eq(true), M.eq(false), any[ClientDesc]) returns Future.value(Some(qitem))
 
         memcacheHandler.handler.pendingReads.add("test", 100)
         memcacheHandler.handler.pendingReads.peek("test") mustEqual List(100)
         Await.result(memcacheHandler(toReq("get test/close/open"))) mustEqual toResp("test", qitem)
         memcacheHandler.handler.pendingReads.peek("test") mustEqual List(qitem.xid)
+        got {
+          one(queueCollection).confirmRemove("test", 100)
+//          one(queueCollection).remove(equals("test"), equals(None), equals(true), equals(false), any[ClientDesc])
+        }
       }
 
       "with timeout" in {
         "value ready immediately" in {
           Time.withCurrentTimeFrozen { time =>
-            expect {
-              one(queueCollection).remove(equal("test"), equal(Some(500.milliseconds.fromNow)), equal(true), equal(false), any[ClientDesc]) willReturn Future.value(Some(qitem))
-            }
+
+            queueCollection.remove(M.eq("test"), M.eq(Some(500.milliseconds.fromNow)), M.eq(true), M.eq(false), any[ClientDesc]) returns Future.value(Some(qitem))
 
             Await.result(memcacheHandler(toReq("get test/t=500/close/open"))) mustEqual toResp("test", qitem)
             memcacheHandler.handler.pendingReads.peek("test") mustEqual List(qitem.xid)
+//            got {
+//              one(queueCollection).remove(equal("test"), equal(Some(500.milliseconds.fromNow)), equal(true), equal(false), any[ClientDesc]) willReturn Future.value(Some(qitem))
+//            }
           }
         }
 
@@ -89,15 +95,15 @@ class MemcacheHandlerSpec extends SpecificationWithJUnit with JMocker with Class
           Time.withCurrentTimeFrozen { time =>
             val promise = new Promise[Option[QItem]]
 
-            expect {
-              one(queueCollection).remove(equal("test"), equal(Some(500.milliseconds.fromNow)), equal(true), equal(false), any[ClientDesc]) willReturn promise
-            }
-
             val future = memcacheHandler(toReq("get test/t=500/close/open"))
+            queueCollection.remove(M.eq("test"), M.eq(Some(500.milliseconds.fromNow)), M.eq(true), M.eq(false), any[ClientDesc]) returns promise
 
             promise.setValue(Some(qitem))
             Await.result(future) mustEqual toResp("test", qitem)
             memcacheHandler.handler.pendingReads.peek("test") mustEqual List(qitem.xid)
+//            got {
+//              one(queueCollection).remove(equal("test"), equal(Some(500.milliseconds.fromNow)), equal(true), equal(false), any[ClientDesc]) willReturn promise
+//            }
           }
         }
 
@@ -105,10 +111,7 @@ class MemcacheHandlerSpec extends SpecificationWithJUnit with JMocker with Class
           Time.withCurrentTimeFrozen { time =>
             val promise = new Promise[Option[QItem]]
 
-            expect {
-              one(queueCollection).confirmRemove("test", 100)
-              one(queueCollection).remove(equal("test"), equal(Some(500.milliseconds.fromNow)), equal(true), equal(false), any[ClientDesc]) willReturn promise
-            }
+            queueCollection.remove(M.eq("test"), M.eq(Some(500.milliseconds.fromNow)), M.eq(true), M.eq(false), any[ClientDesc]) returns promise
 
             memcacheHandler.handler.pendingReads.add("test", 100)
             memcacheHandler.handler.pendingReads.peek("test") mustEqual List(100)
@@ -118,41 +121,52 @@ class MemcacheHandlerSpec extends SpecificationWithJUnit with JMocker with Class
             promise.setValue(None)
             Await.result(future) mustEqual endResponse
             memcacheHandler.handler.pendingReads.peek("test") mustEqual List()
+
+            got {
+              one(queueCollection).confirmRemove("test", 100)
+//              one(queueCollection).remove(equal("test"), equal(Some(500.milliseconds.fromNow)), equal(true), equal(false), any[ClientDesc]) willReturn promise
+            }
+
           }
         }
       }
 
       "empty queue" in {
-        expect {
-          one(queueCollection).confirmRemove("test", 100)
-          one(queueCollection).remove(equal("test"), equal(None), equal(true), equal(false), any[ClientDesc]) willReturn Future.value(None)
-        }
+
+        queueCollection.remove(M.eq("test"), M.eq(None), M.eq(true), M.eq(false), any[ClientDesc]) returns Future.value(None)
 
         memcacheHandler.handler.pendingReads.add("test", 100)
         memcacheHandler.handler.pendingReads.peek("test") mustEqual List(100)
         Await.result(memcacheHandler(toReq("get test/close/open"))) mustEqual endResponse
         memcacheHandler.handler.pendingReads.peek("test") mustEqual List()
+
+        got {
+          one(queueCollection).confirmRemove("test", 100)
+//          one(queueCollection).remove(equal("test"), equal(None), equal(true), equal(false), any[ClientDesc]) willReturn Future.value(None)
+        }
       }
 
       "item ready" in {
-        expect {
-          one(queueCollection).remove(equal("test"), equal(None), equal(true), equal(false), any[ClientDesc]) willReturn Future.value(Some(qitem))
-        }
+        queueCollection.remove(M.eq("test"), M.eq(None), M.eq(true), M.eq(false), any[ClientDesc]) returns Future.value(Some(qitem))
 
         Await.result(memcacheHandler(toReq("get test/close/open"))) mustEqual toResp("test", qitem)
         memcacheHandler.handler.pendingReads.peek("test") mustEqual List(qitem.xid)
+
+//        got {
+//          one(queueCollection).remove(equal("test"), equal(None), equal(true), equal(false), any[ClientDesc]) willReturn Future.value(Some(qitem))
+//        }
       }
 
       "aborting" in {
         memcacheHandler.handler.pendingReads.add("test", 100)
         memcacheHandler.handler.pendingReads.peek("test") mustEqual List(100)
 
-        expect {
-          one(queueCollection).unremove("test", 100)
-        }
-
         Await.result(memcacheHandler(toReq("get test/abort"))) mustEqual endResponse
         memcacheHandler.handler.pendingReads.peek("test") mustEqual List()
+
+        got {
+          one(queueCollection).unremove("test", 100)
+        }
       }
 
       "forbidden option combinations" in {
@@ -168,21 +182,21 @@ class MemcacheHandlerSpec extends SpecificationWithJUnit with JMocker with Class
     }
 
     "get request (non-transactional)" in {
-      expect {
-        1.atLeastOf(connection).remoteAddress willReturn address
-      }
+      connection.remoteAddress returns address
 
       val memcacheHandler = new MemcacheHandler(connection, queueCollection, 10)
 
       "with timeout" in {
         "value ready immediately" in {
           Time.withCurrentTimeFrozen { time =>
-            expect {
-              one(queueCollection).remove(equal("test"), equal(Some(500.milliseconds.fromNow)), equal(false), equal(false), any[ClientDesc]) willReturn Future.value(Some(qitem))
-            }
+
+            queueCollection.remove(M.eq("test"), M.eq(Some(500.milliseconds.fromNow)), M.eq(false), M.eq(false), any[ClientDesc]) returns Future.value(Some(qitem))
 
             Await.result(memcacheHandler(toReq("get test/t=500"))) mustEqual toResp("test", qitem)
             memcacheHandler.handler.pendingReads.peek("test") mustEqual List()
+//            got {
+//              one(queueCollection).remove(equal("test"), equal(Some(500.milliseconds.fromNow)), equal(false), equal(false), any[ClientDesc]) willReturn Future.value(Some(qitem))
+//            }
           }
         }
 
@@ -190,32 +204,37 @@ class MemcacheHandlerSpec extends SpecificationWithJUnit with JMocker with Class
           Time.withCurrentTimeFrozen { time =>
             val promise = new Promise[Option[QItem]]
 
-            expect {
-              one(queueCollection).remove(equal("test"), equal(Some(500.milliseconds.fromNow)), equal(false), equal(false), any[ClientDesc]) willReturn promise
-            }
-
             val future = memcacheHandler(toReq("get test/t=500"))
+            queueCollection.remove(M.eq("test"), M.eq(Some(500.milliseconds.fromNow)), M.eq(false), M.eq(false), any[ClientDesc]) returns promise
 
             promise.setValue(Some(qitem))
             Await.result(future) mustEqual toResp("test", qitem)
             memcacheHandler.handler.pendingReads.peek("test") mustEqual List()
+
+//            got {
+//              one(queueCollection).remove(equal("test"), equal(Some(500.milliseconds.fromNow)), equal(false), equal(false), any[ClientDesc]) willReturn promise
+//            }
           }
         }
       }
 
       "item ready" in {
-        expect {
-          one(queueCollection).remove(equal("test"), equal(None), equal(false), equal(false), any[ClientDesc]) willReturn Future.value(Some(qitem))
-        }
+        queueCollection.remove(M.eq("test"), M.eq(None), M.eq(false), M.eq(false), any[ClientDesc]) returns Future.value(Some(qitem))
+
+//        expect {
+//          one(queueCollection).remove(equal("test"), equal(None), equal(false), equal(false), any[ClientDesc]) willReturn Future.value(Some(qitem))
+//        }
 
         Await.result(memcacheHandler(toReq("get test"))) mustEqual toResp("test", qitem)
         memcacheHandler.handler.pendingReads.peek("test") mustEqual List()
       }
 
       "peek" in {
-        expect {
-          one(queueCollection).remove(equal("test"), equal(None), equal(false), equal(true), any[ClientDesc]) willReturn Future.value(Some(qitem))
-        }
+        queueCollection.remove(M.eq("test"), M.eq(None), M.eq(false), M.eq(true), any[ClientDesc]) returns Future.value(Some(qitem))
+
+//        expect {
+//          one(queueCollection).remove(equal("test"), equal(None), equal(false), equal(true), any[ClientDesc]) willReturn Future.value(Some(qitem))
+//        }
 
         Await.result(memcacheHandler(toReq("get test/peek"))) mustEqual toResp("test", qitem)
       }
@@ -241,13 +260,16 @@ class MemcacheHandlerSpec extends SpecificationWithJUnit with JMocker with Class
 
       "items ready" in {
         Time.withCurrentTimeFrozen { tc =>
+
           val timeLimit = Some(Time.now + 100.seconds)
-          expect {
-            one(connection).remoteAddress willReturn address
-            one(queueCollection).remove(equal("test"), equal(timeLimit), equal(true), equal(false), any[ClientDesc]) willReturn Future.value(Some(qitem))
-            one(queueCollection).remove(equal("test"), equal(timeLimit), equal(true), equal(false), any[ClientDesc]) willReturn Future.value(Some(qitem2))
-            one(queueCollection).remove(equal("test"), equal(timeLimit), equal(true), equal(false), any[ClientDesc]) willReturn Future.value(Some(qitem3))
-          }
+          connection.remoteAddress returns address
+          queueCollection.remove(M.eq("test"), M.eq(timeLimit), M.eq(true), M.eq(false), any[ClientDesc]) returns Future.value(Some(qitem)) thenReturns Future.value(Some(qitem2)) thenReturns Future.value(Some(qitem3))
+
+//          expect {
+//            one(queueCollection).remove(equal("test"), equal(timeLimit), equal(true), equal(false), any[ClientDesc]) willReturn Future.value(Some(qitem))
+//            one(queueCollection).remove(equal("test"), equal(timeLimit), equal(true), equal(false), any[ClientDesc]) willReturn Future.value(Some(qitem2))
+//            one(queueCollection).remove(equal("test"), equal(timeLimit), equal(true), equal(false), any[ClientDesc]) willReturn Future.value(Some(qitem3))
+//          }
           val memcacheHandler = new MemcacheHandler(connection, queueCollection, 10)
 
           val response = Await.result(memcacheHandler(toReq("monitor test 100 3")))
@@ -261,11 +283,13 @@ class MemcacheHandlerSpec extends SpecificationWithJUnit with JMocker with Class
           val timeLimit = Some(Time.now + 100.seconds)
           val promise = new Promise[Option[QItem]]
           val promise2 = new Promise[Option[QItem]]
-          expect {
-            one(connection).remoteAddress willReturn address
-            one(queueCollection).remove(equal("test"), equal(timeLimit), equal(true), equal(false), any[ClientDesc]) willReturn promise
-            one(queueCollection).remove(equal("test"), equal(timeLimit), equal(true), equal(false), any[ClientDesc]) willReturn promise2
-          }
+          connection.remoteAddress returns address
+          queueCollection.remove(M.eq("test"), M.eq(timeLimit), M.eq(true), M.eq(false), any[ClientDesc]) returns promise thenReturns promise2
+//          expect {
+//            one(connection).remoteAddress willReturn address
+//            one(queueCollection).remove(equal("test"), equal(timeLimit), equal(true), equal(false), any[ClientDesc]) willReturn promise
+//            one(queueCollection).remove(equal("test"), equal(timeLimit), equal(true), equal(false), any[ClientDesc]) willReturn promise2
+//          }
           val memcacheHandler = new MemcacheHandler(connection, queueCollection, 10)
           val response = memcacheHandler(toReq("monitor test 100 2"))
 
@@ -282,13 +306,16 @@ class MemcacheHandlerSpec extends SpecificationWithJUnit with JMocker with Class
       "some items ready" in {
         Time.withCurrentTimeFrozen { tc =>
           val timeLimit = Some(Time.now + 100.seconds)
-          expect {
-            one(connection).remoteAddress willReturn address
-            one(queueCollection).remove(equal("test"), equal(timeLimit), equal(true), equal(false), any[ClientDesc]) willReturn Future.value(Some(qitem))
-            one(queueCollection).remove(equal("test"), equal(timeLimit), equal(true), equal(false), any[ClientDesc]) willReturn Future.value(Some(qitem2))
-            one(queueCollection).remove(equal("test"), equal(timeLimit), equal(true), equal(false), any[ClientDesc]) willReturn Future.value(Some(qitem3))
-            one(queueCollection).remove(equal("test"), equal(timeLimit), equal(true), equal(false), any[ClientDesc]) willReturn Future.value(None)
-          }
+          connection.remoteAddress returns address
+          queueCollection.remove(M.eq("test"), M.eq(timeLimit), M.eq(true), M.eq(false), any[ClientDesc]) returns Future.value(Some(qitem)) thenReturns Future.value(Some(qitem2)) thenReturns Future.value(Some(qitem3)) thenReturns Future.value(None)
+
+//          expect {
+//            one(connection).remoteAddress willReturn address
+//            one(queueCollection).remove(equal("test"), equal(timeLimit), equal(true), equal(false), any[ClientDesc]) willReturn Future.value(Some(qitem))
+//            one(queueCollection).remove(equal("test"), equal(timeLimit), equal(true), equal(false), any[ClientDesc]) willReturn Future.value(Some(qitem2))
+//            one(queueCollection).remove(equal("test"), equal(timeLimit), equal(true), equal(false), any[ClientDesc]) willReturn Future.value(Some(qitem3))
+//            one(queueCollection).remove(equal("test"), equal(timeLimit), equal(true), equal(false), any[ClientDesc]) willReturn Future.value(None)
+//          }
           val memcacheHandler = new MemcacheHandler(connection, queueCollection, 10)
 
           val response = Await.result(memcacheHandler(toReq("monitor test 100 5")))
@@ -301,11 +328,13 @@ class MemcacheHandlerSpec extends SpecificationWithJUnit with JMocker with Class
         Time.withCurrentTimeFrozen { tc =>
           val timeLimit = Some(Time.now + 100.seconds)
           val promise = new Promise[Option[QItem]]
+          connection.remoteAddress returns address
+          queueCollection.remove(M.eq("test"), M.eq(timeLimit), M.eq(true), M.eq(false), any[ClientDesc]) returns promise
 
-          expect {
-            one(connection).remoteAddress willReturn address
-            one(queueCollection).remove(equal("test"), equal(timeLimit), equal(true), equal(false), any[ClientDesc]) willReturn promise
-          }
+//          expect {
+//            one(connection).remoteAddress willReturn address
+//            one(queueCollection).remove(equal("test"), equal(timeLimit), equal(true), equal(false), any[ClientDesc]) willReturn promise
+//          }
           val memcacheHandler = new MemcacheHandler(connection, queueCollection, 10)
           val response = memcacheHandler(toReq("monitor test 100 2"))
 
@@ -320,11 +349,12 @@ class MemcacheHandlerSpec extends SpecificationWithJUnit with JMocker with Class
       "max open reads" in {
         Time.withCurrentTimeFrozen { tc =>
           val timeLimit = Some(Time.now + 100.seconds)
-
-          expect {
-            one(connection).remoteAddress willReturn address
-            one(queueCollection).remove(equal("test"), equal(timeLimit), equal(true), equal(false), any[ClientDesc]) willReturn Future(Some(qitem))
-          }
+          connection.remoteAddress returns address
+          queueCollection.remove(M.eq("test"), M.eq(timeLimit), M.eq(true), M.eq(false), any[ClientDesc]) returns Future(Some(qitem))
+//          expect {
+//            one(connection).remoteAddress willReturn address
+//            one(queueCollection).remove(equal("test"), equal(timeLimit), equal(true), equal(false), any[ClientDesc]) willReturn Future(Some(qitem))
+//          }
           val memcacheHandler = new MemcacheHandler(connection, queueCollection, 10)
           (100 until 109).foreach { xid =>
             memcacheHandler.handler.pendingReads.add("test", xid)
@@ -341,10 +371,12 @@ class MemcacheHandlerSpec extends SpecificationWithJUnit with JMocker with Class
 
     "confirm" in {
       "single" in {
-        expect {
-          one(connection).remoteAddress willReturn address
-          one(queueCollection).confirmRemove("test", 100)
-        }
+        connection.remoteAddress returns address
+//
+//        expect {
+//          one(connection).remoteAddress willReturn address
+//          one(queueCollection).confirmRemove("test", 100)
+//        }
 
         val memcacheHandler = new MemcacheHandler(connection, queueCollection, 10)
         memcacheHandler.handler.pendingReads.add("test", 100)
@@ -353,11 +385,13 @@ class MemcacheHandlerSpec extends SpecificationWithJUnit with JMocker with Class
       }
 
       "multiple" in {
-        expect {
-          one(connection).remoteAddress willReturn address
-          one(queueCollection).confirmRemove("test", 100)
-          one(queueCollection).confirmRemove("test", 101)
-        }
+        connection.remoteAddress returns address
+
+//        expect {
+//          one(connection).remoteAddress willReturn address
+//          one(queueCollection).confirmRemove("test", 100)
+//          one(queueCollection).confirmRemove("test", 101)
+//        }
 
         val memcacheHandler = new MemcacheHandler(connection, queueCollection, 10)
         memcacheHandler.handler.pendingReads.add("test", 100)
@@ -370,10 +404,12 @@ class MemcacheHandlerSpec extends SpecificationWithJUnit with JMocker with Class
 
     "put request" in {
       Time.withCurrentTimeFrozen { timeMutator =>
-        expect {
-          one(connection).remoteAddress willReturn address
-          one(queueCollection).add(equal("test"), equal("hello".getBytes), equal(None), equal(Time.now), any[ClientDesc]) willReturn true
-        }
+        connection.remoteAddress returns address
+        queueCollection.add(M.eq("test"), M.eq("hello".getBytes), M.eq(None), M.eq(Time.now), any[ClientDesc]) returns true
+//        expect {
+//          one(connection).remoteAddress willReturn address
+//          one(queueCollection).add(equal("test"), equal("hello".getBytes), equal(None), equal(Time.now), any[ClientDesc]) willReturn true
+//        }
 
         val memcacheHandler = new MemcacheHandler(connection, queueCollection, 10)
         Await.result(memcacheHandler(toReq("set test 0 0 5", Some("hello")))) mustEqual MemcacheResponse("STORED", None)
@@ -381,29 +417,35 @@ class MemcacheHandlerSpec extends SpecificationWithJUnit with JMocker with Class
     }
 
     "delete request" in {
-      expect {
-        one(connection).remoteAddress willReturn address
-        one(queueCollection).delete(equal("test"), any[ClientDesc])
-      }
+      connection.remoteAddress returns address
+//
+//      expect {
+//        one(connection).remoteAddress willReturn address
+//        one(queueCollection).delete(equal("test"), any[ClientDesc])
+//      }
 
       val memcacheHandler = new MemcacheHandler(connection, queueCollection, 10)
       Await.result(memcacheHandler(toReq("delete test"))) mustEqual MemcacheResponse("DELETED", None)
+      got {
+        one(queueCollection).delete(M.eq("test"), any[ClientDesc])
+      }
+
     }
 
     "flush request" in {
-      expect {
-        one(connection).remoteAddress willReturn address
-        one(queueCollection).flush(equal("test"), any[ClientDesc])
-      }
+      connection.remoteAddress returns address
 
       val memcacheHandler = new MemcacheHandler(connection, queueCollection, 10)
       Await.result(memcacheHandler(toReq("flush test"))) mustEqual MemcacheResponse("END", None)
+
+      got {
+        one(queueCollection).flush(M.eq("test"), any[ClientDesc])
+      }
+
     }
 
     "version request" in {
-      expect {
-        one(connection).remoteAddress willReturn address
-      }
+      connection.remoteAddress returns address
 
       val runtime = RuntimeEnvironment(this, Array())
       Kestrel.runtime = runtime
@@ -415,9 +457,7 @@ class MemcacheHandlerSpec extends SpecificationWithJUnit with JMocker with Class
 
     "status request" in {
       "without server status" in {
-        expect {
-          one(connection).remoteAddress willReturn address
-        }
+        connection.remoteAddress returns address
 
         val memcacheHandler = new MemcacheHandler(connection, queueCollection, 10)
 
@@ -432,33 +472,33 @@ class MemcacheHandlerSpec extends SpecificationWithJUnit with JMocker with Class
 
       "with server status" in {
         val serverStatus = mock[ServerStatus]
-
-        expect {
-          one(connection).remoteAddress willReturn address
-        }
+        connection.remoteAddress returns address
 
         val memcacheHandler = new MemcacheHandler(connection, queueCollection, 10, Some(serverStatus))
 
         "check status should return current status" in {
-          expect {
-            one(serverStatus).status willReturn Up
-          }
+          serverStatus.status returns Up
+//          expect {
+//            one(serverStatus).status willReturn Up
+//          }
 
           Await.result(memcacheHandler(toReq("status"))) mustEqual MemcacheResponse("UP", None)
         }
 
         "set status should set current status" in {
-          expect {
+
+          Await.result(memcacheHandler(toReq("status readonly"))) mustEqual endResponse
+          got {
             one(serverStatus).setStatus("readonly")
           }
 
-          Await.result(memcacheHandler(toReq("status readonly"))) mustEqual endResponse
         }
 
         "set status should report client error on invalid status" in {
-          expect {
-            one(serverStatus).setStatus("spongebob") willThrow new UnknownStatusException
-          }
+          serverStatus.setStatus("spongebob") throws new UnknownStatusException
+//          expect {
+//            one(serverStatus).setStatus("spongebob") willThrow new UnknownStatusException
+//          }
 
           Await.result(memcacheHandler(toReq("status spongebob"))) mustEqual clientErrorResponse
         }
@@ -467,10 +507,12 @@ class MemcacheHandlerSpec extends SpecificationWithJUnit with JMocker with Class
 
     "availability exception returns SERVER_ERROR" in {
       val serverStatus = mock[ServerStatus]
-      expect {
-        one(connection).remoteAddress willReturn address
-        one(serverStatus).blockReads willReturn true
-      }
+      connection.remoteAddress returns address
+      serverStatus.blockReads returns true
+//      expect {
+//        one(connection).remoteAddress willReturn address
+//        one(serverStatus).blockReads willReturn true
+//      }
 
       val memcacheHandler = new MemcacheHandler(connection, queueCollection, 10, Some(serverStatus))
 
@@ -478,9 +520,10 @@ class MemcacheHandlerSpec extends SpecificationWithJUnit with JMocker with Class
     }
 
     "unknown command" in {
-      expect {
-        one(connection).remoteAddress willReturn address
-      }
+      connection.remoteAddress returns address
+//      expect {
+//        one(connection).remoteAddress willReturn address
+//      }
 
       val memcacheHandler = new MemcacheHandler(connection, queueCollection, 10)
       Await.result(memcacheHandler(toReq("die in a fire"))) mustEqual clientErrorResponse

@@ -155,7 +155,7 @@ class LocalMetadataStore(path: String, val statusLabel: String) extends Persiste
     try {
       writer.write(metadata + "\n")
       log.debug("stored %s '%s' in '%s'", statusLabel, metadata, metadataFile)
-    } catch { case e =>
+    } catch { case e : Throwable =>
       log.error(e, "unable store %s at '%s'", statusLabel, metadataFile)
     } finally {
       writer.close()

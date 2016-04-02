@@ -23,7 +23,7 @@ import com.twitter.finagle.{ClientConnection, Codec => FinagleCodec, Service => 
 import com.twitter.finagle.builder.{Server, ServerBuilder}
 import com.twitter.finagle.stats.OstrichStatsReceiver
 import com.twitter.finagle.thrift._
-import com.twitter.finagle.util.TimerFromNettyTimer
+import com.twitter.finagle.util.HashedWheelTimer
 import com.twitter.logging.Logger
 import com.twitter.naggati.Codec
 import com.twitter.naggati.codec.{MemcacheResponse, MemcacheRequest, MemcacheCodec}
@@ -38,7 +38,7 @@ import java.util.concurrent._
 import java.util.concurrent.atomic.AtomicInteger
 import org.apache.thrift.protocol.TBinaryProtocol
 import org.jboss.netty.channel.{ChannelPipelineFactory, Channels}
-import org.jboss.netty.util.HashedWheelTimer
+// import org.jboss.netty.util.HashedWheelTimer
 import java.io.File
 
 class Kestrel(defaultQueueConfig: QueueConfig, builders: List[QueueBuilder], aliases: List[AliasBuilder],
@@ -141,8 +141,8 @@ class Kestrel(defaultQueueConfig: QueueConfig, builders: List[QueueBuilder], ali
     Stats.setLabel("version", Kestrel.runtime.jarVersion)
 
     // this means no timeout will be at better granularity than 100 ms.
-    val nettyTimer = new HashedWheelTimer(100, TimeUnit.MILLISECONDS)
-    timer = new TimerFromNettyTimer(nettyTimer)
+    // val nettyTimer = new HashedWheelTimer(100, TimeUnit.MILLISECONDS)
+    timer = HashedWheelTimer(100.milliseconds)
 
     journalSyncScheduler =
       new ScheduledThreadPoolExecutor(
@@ -159,7 +159,7 @@ class Kestrel(defaultQueueConfig: QueueConfig, builders: List[QueueBuilder], ali
       val beFactory = beFactoryClass map { className =>
         StreamContainerFactory(className)
       } getOrElse new LocalFSContainerFactory(queuePath, statusFile, journalSyncScheduler)
-      
+
       val streamContainer = beFactory.createStreamContainer()
       val statusStore = beFactory.createStatusStore()
 
@@ -346,7 +346,7 @@ object Kestrel {
 
       kestrel.start()
     } catch {
-      case e =>
+      case e : Throwable =>
         log.error(e, "Exception during startup; exiting!")
 
         // Shut down all registered services such as AdminHttpService properly

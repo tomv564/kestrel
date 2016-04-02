@@ -18,41 +18,44 @@ import java.util.concurrent.ScheduledThreadPoolExecutor
 import com.twitter.conversions.time._
 import com.twitter.ostrich.stats.Stats
 import com.twitter.util.{TempFolder, Time}
-import org.specs.SpecificationWithJUnit
+import org.specs2.mutable._
 import config._
+import org.specs2.specification.BeforeAfterEach
 
-class AliasedQueueSpec extends SpecificationWithJUnit with TempFolder {
+class AliasedQueueSpec extends Specification with TempFolder with BeforeAfterEach {
+
+  isolated
 
   private var qc: QueueCollection = null
   private var aq: AliasedQueue = null
 
   val queueConfig = new QueueBuilder().apply()
   val aliasConfig = new AliasBuilder().apply()
+  val timer = new FakeTimer()
+  val scheduler = new ScheduledThreadPoolExecutor(1)
+
+  def before = {
+    withTempFolder {
+      Stats.clearAll()
+      qc = new QueueCollection(folderName, timer, scheduler, queueConfig, Nil, Nil)
+      aq = new AliasedQueue("kestrel", aliasConfig, qc)
+    }
+  }
+
+  def after = {
+    if (qc ne null) {
+      qc.shutdown
+    }
+  }
 
   "AliasedQueue" should {
-    val timer = new FakeTimer()
-    val scheduler = new ScheduledThreadPoolExecutor(1)
-
-    doBefore {
-      withTempFolder {
-        Stats.clearAll()
-        qc = new QueueCollection(folderName, timer, scheduler, queueConfig, Nil, Nil)
-        aq = new AliasedQueue("kestrel", aliasConfig, qc)
-      }
-    }
-
-    doAfter {
-      if (qc ne null) {
-        qc.shutdown
-      }
-    }
 
     "generate a stats queue name" in {
       aq.statNamed("queue") mustEqual "q/kestrel/queue"
     }
 
     "add a value to the end of an aliased queue" in {
-      aq.add(Array(1, 2, 3, 4), None, Time.now, None) mustEqual true
+      aq.add(Array[Byte](1, 2, 3, 4), None, Time.now, None) mustEqual true
     }
 
     "return an array of empty stats when no value was added to the queue" in {
@@ -63,7 +66,7 @@ class AliasedQueueSpec extends SpecificationWithJUnit with TempFolder {
     }
 
     "return an array of stats when a value is added to the aliased queue" in {
-      aq.add(Array(1, 2, 3, 4), None, Time.now, None)
+      aq.add(Array[Byte](1, 2, 3, 4), None, Time.now, None)
       val stats = aq.dumpStats().toMap
       stats("put_items") mustEqual "1"
       stats("put_bytes") mustEqual "4"

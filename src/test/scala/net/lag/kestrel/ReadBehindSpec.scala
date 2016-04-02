@@ -19,25 +19,32 @@ package net.lag.kestrel
 
 import java.io.{File, FileInputStream}
 import java.util.concurrent.{CountDownLatch, ScheduledThreadPoolExecutor}
+import org.specs2.matcher.{Expectable, Matcher}
+
 import scala.collection.mutable
 import com.twitter.conversions.storage._
 import com.twitter.conversions.time._
 import com.twitter.logging.TestLogging
 import com.twitter.util.{Duration, TempFolder, Time, Timer, TimerTask}
-import org.specs.SpecificationWithJUnit
+import org.specs2.mutable._
 import config._
 
-class ReadBehindSpec extends SpecificationWithJUnit with TempFolder with TestLogging with QueueMatchers {
+
+class ReadBehindSpec extends Specification with TempFolder with TestLogging with QueueMatchers with BeforeAfter {
+
+  isolated
+
+  def before = {
+    Journal.packer.start()
+  }
+
+  def after = {
+    Journal.packer.shutdown()
+  }
+
   "PersistentQueue read-behind" should {
-    doBefore {
-      Journal.packer.start()
-    }
 
-    doAfter {
-      Journal.packer.shutdown()
-    }
-
-    val timer = new FakeTimer()
+   val timer = new FakeTimer()
     val scheduler = new ScheduledThreadPoolExecutor(1)
 
     "drop into read-behind mode on insert" in {
@@ -52,7 +59,7 @@ class ReadBehindSpec extends SpecificationWithJUnit with TempFolder with TestLog
           put(q, 128, i)
           q.inReadBehind mustEqual (i >= 8)
         }
-        q.inReadBehind mustBe true
+        q.inReadBehind mustEqual  true
         q.length mustEqual 10
         q.bytes mustEqual 1280
         q.memoryLength mustEqual 8
@@ -60,7 +67,7 @@ class ReadBehindSpec extends SpecificationWithJUnit with TempFolder with TestLog
 
         // read 1 item. queue should pro-actively read the next item in from disk.
         q.remove() must beSomeQItem(128, 0)
-        q.inReadBehind mustBe true
+        q.inReadBehind mustEqual true
         q.length mustEqual 9
         q.bytes mustEqual 1152
         q.memoryLength mustEqual 8
@@ -68,7 +75,7 @@ class ReadBehindSpec extends SpecificationWithJUnit with TempFolder with TestLog
 
         // adding a new item should be ok
         put(q, 128, 10)
-        q.inReadBehind mustBe true
+        q.inReadBehind mustEqual true
         q.length mustEqual 10
         q.bytes mustEqual 1280
         q.memoryLength mustEqual 8
@@ -76,7 +83,7 @@ class ReadBehindSpec extends SpecificationWithJUnit with TempFolder with TestLog
 
         // read again.
         q.remove() must beSomeQItem(128, 1)
-        q.inReadBehind mustBe true
+        q.inReadBehind mustEqual true
         q.length mustEqual 9
         q.bytes mustEqual 1152
         q.memoryLength mustEqual 8
@@ -84,7 +91,7 @@ class ReadBehindSpec extends SpecificationWithJUnit with TempFolder with TestLog
 
         // and again.
         q.remove() must beSomeQItem(128, 2)
-        q.inReadBehind mustBe true
+        q.inReadBehind mustEqual true
         q.length mustEqual 8
         q.bytes mustEqual 1024
         q.memoryLength mustEqual 8
@@ -92,13 +99,15 @@ class ReadBehindSpec extends SpecificationWithJUnit with TempFolder with TestLog
 
         for (i <- 3 until 11) {
           q.remove() must beSomeQItem(128, i)
-          q.inReadBehind mustBe false
+          q.inReadBehind mustEqual false
           q.length mustEqual 10 - i
           q.bytes mustEqual 128 * (10 - i)
           q.memoryLength mustEqual 10 - i
           q.memoryBytes mustEqual 128 * (10 - i)
         }
       }
+      success
+
     }
 
     "drop into read-behind mode on startup" in {
@@ -113,7 +122,7 @@ class ReadBehindSpec extends SpecificationWithJUnit with TempFolder with TestLog
           put(q, 128, i)
           q.inReadBehind mustEqual (i >= 8)
         }
-        q.inReadBehind mustBe true
+        q.inReadBehind mustEqual true
         q.length mustEqual 10
         q.bytes mustEqual 1280
         q.memoryLength mustEqual 8
@@ -123,7 +132,7 @@ class ReadBehindSpec extends SpecificationWithJUnit with TempFolder with TestLog
         val q2 = new PersistentQueue("things", folderName, config, timer, scheduler)
         q2.setup
 
-        q2.inReadBehind mustBe true
+        q2.inReadBehind mustEqual true
         q2.length mustEqual 10
         q2.bytes mustEqual 1280
         q2.memoryLength mustEqual 8
@@ -138,6 +147,8 @@ class ReadBehindSpec extends SpecificationWithJUnit with TempFolder with TestLog
           q2.memoryBytes mustEqual (if (i < 2) 1024 else 128 * (9 - i))
         }
       }
+      success
+
     }
 
     "drop into read-behind mode during journal processing, then return to ordinary times" in {
@@ -152,7 +163,7 @@ class ReadBehindSpec extends SpecificationWithJUnit with TempFolder with TestLog
           put(q, 128, i)
           q.inReadBehind mustEqual (i >= 8)
         }
-        q.inReadBehind mustBe true
+        q.inReadBehind mustEqual true
         q.length mustEqual 10
         q.bytes mustEqual 1280
         q.memoryLength mustEqual 8
@@ -160,7 +171,7 @@ class ReadBehindSpec extends SpecificationWithJUnit with TempFolder with TestLog
         for (i <- 0 until 10) {
           q.remove() must beSomeQItem(128, i)
         }
-        q.inReadBehind mustBe false
+        q.inReadBehind mustEqual false
         q.length mustEqual 0
         q.bytes mustEqual 0
         q.memoryLength mustEqual 0
@@ -169,12 +180,14 @@ class ReadBehindSpec extends SpecificationWithJUnit with TempFolder with TestLog
 
         val q2 = new PersistentQueue("things", folderName, config, timer, scheduler)
         q2.setup
-        q2.inReadBehind mustBe false
+        q2.inReadBehind mustEqual false
         q2.length mustEqual 0
         q2.bytes mustEqual 0
         q2.memoryLength mustEqual 0
         q2.memoryBytes mustEqual 0
       }
+      success
+
     }
 
     "cope with read-behind on the primary journal file after it gets moved" in {
@@ -195,6 +208,8 @@ class ReadBehindSpec extends SpecificationWithJUnit with TempFolder with TestLog
         }
         q.close()
       }
+      success
+
     }
 
     "follow read-behind from several files back" in {
@@ -210,28 +225,30 @@ class ReadBehindSpec extends SpecificationWithJUnit with TempFolder with TestLog
           put(q, 128, i)
           q.inReadBehind mustEqual (i >= 8)
         }
-        q.inReadBehind mustBe true
+        q.inReadBehind mustEqual true
         for (i <- 0 until 10) {
           q.remove() must beSomeQItem(128, i)
         }
-        q.inReadBehind mustBe true
+        q.inReadBehind mustEqual true
         for (i <- 30 until 40) {
           put(q, 128, i)
-          q.inReadBehind mustBe true
+          q.inReadBehind mustEqual true
         }
         // leave one item behind so the journal isn't rewritten:
         for (i <- 10 until 39) {
           q.remove() must beSomeQItem(128, i)
         }
-        q.inReadBehind mustBe false
+        q.inReadBehind mustEqual false
         q.close()
 
         val q2 = new PersistentQueue("things", folderName, config, timer, scheduler)
         q2.setup
-        q2.inReadBehind mustBe false
+        q2.inReadBehind mustEqual false
         q2.length mustEqual 1
         q2.close()
       }
+      success
+
     }
   }
 }

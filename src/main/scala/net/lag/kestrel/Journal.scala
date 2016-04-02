@@ -241,7 +241,7 @@ class Journal(queuePath: PersistentStreamContainer, queueName: String, syncPerio
       }
       queuePath.deleteStream(queueName)
     } catch {
-      case _ =>
+      case _ : Throwable =>
     }
   }
 

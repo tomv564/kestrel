@@ -25,11 +25,15 @@ import com.twitter.util.{Await,TempFolder, Time, Timer}
 import com.twitter.conversions.time._
 import com.twitter.conversions.storage._
 import com.twitter.ostrich.stats.Stats
-import org.specs.SpecificationWithJUnit
+import org.specs2.mutable._
 import config._
 
-class QueueCollectionSpec extends SpecificationWithJUnit with TempFolder with TestLogging with QueueMatchers {
+class QueueCollectionSpec extends Specification with TempFolder with TestLogging with QueueMatchers with After {
   private var qc: QueueCollection = null
+  def after = {
+    if (qc ne null) {}
+      qc.shutdown
+  }
 
   val config = new QueueBuilder().apply()
 
@@ -37,11 +41,11 @@ class QueueCollectionSpec extends SpecificationWithJUnit with TempFolder with Te
     val timer = new FakeTimer()
     val scheduler = new ScheduledThreadPoolExecutor(1)
 
-    doAfter {
-      if (qc ne null) {
-        qc.shutdown
-      }
-    }
+//    doAfter {
+//      if (qc ne null) {
+//        qc.shutdown
+//      }
+//    }
 
     "create a queue" in {
       withTempFolder {
@@ -70,6 +74,8 @@ class QueueCollectionSpec extends SpecificationWithJUnit with TempFolder with Te
         qc.currentItems mustEqual 0
         Stats.getCounter("total_items")() mustEqual 2
       }
+      success
+
     }
 
     "refuse to create a bad queue" in {
@@ -77,6 +83,8 @@ class QueueCollectionSpec extends SpecificationWithJUnit with TempFolder with Te
         qc = new QueueCollection(folderName, timer, scheduler, config, Nil, Nil)
         qc.queue("hello.there") must throwA[Exception]
       }
+      success
+
     }
 
     "refuse to create a bad fanout queue and not break the master queue" in {
@@ -85,8 +93,10 @@ class QueueCollectionSpec extends SpecificationWithJUnit with TempFolder with Te
         qc.queue("the_queue")
         qc.queue("the_queue+fanout/open/close") must throwA[Exception]
 
-        qc.add("the_queue", "xypdq".getBytes) mustNot throwA[Exception]
+        qc.add("the_queue", "xypdq".getBytes) //must not throwA[Exception]
       }
+      success
+
     }
 
     "report reserved memory usage as a fraction of max heap" in {
@@ -102,6 +112,8 @@ class QueueCollectionSpec extends SpecificationWithJUnit with TempFolder with Te
           qc.reservedMemoryRatio mustEqual (i.toDouble / 4.0)
         }
       }
+      success
+
     }
 
     "load from journal" in {
@@ -122,6 +134,8 @@ class QueueCollectionSpec extends SpecificationWithJUnit with TempFolder with Te
         qc.currentBytes mustEqual 10
         qc.currentItems mustEqual 2
       }
+      success
+
     }
 
     "queue hit/miss tracking" in {
@@ -150,6 +164,8 @@ class QueueCollectionSpec extends SpecificationWithJUnit with TempFolder with Te
         Stats.getCounter("get_hits")() mustEqual 2
         Stats.getCounter("get_misses")() mustEqual 3
       }
+      success
+
     }
 
     "proactively load existing queue files" in {
@@ -161,6 +177,8 @@ class QueueCollectionSpec extends SpecificationWithJUnit with TempFolder with Te
         qc.loadQueues()
         qc.queueNames.sorted mustEqual List("apples", "oranges")
       }
+      success
+
     }
 
     "ignore partially rolled queue files" in {
@@ -172,6 +190,8 @@ class QueueCollectionSpec extends SpecificationWithJUnit with TempFolder with Te
         qc.loadQueues()
         qc.queueNames.sorted mustEqual List("apples", "oranges")
       }
+      success
+
     }
 
     "delete a queue when asked" in {
@@ -188,6 +208,7 @@ class QueueCollectionSpec extends SpecificationWithJUnit with TempFolder with Te
         new File(folderName).list().toList.sorted mustEqual List("apples")
         qc.queueNames.sorted mustEqual List("apples")
       }
+      success
     }
 
     "fanout queues" in {
@@ -202,6 +223,7 @@ class QueueCollectionSpec extends SpecificationWithJUnit with TempFolder with Te
           Await.result(qc.remove("jobs")) must beSomeQItem("job1")
           Await.result(qc.remove("jobs")) must beSomeQItem("job2")
         }
+        success
       }
 
       "preload existing" in {
@@ -218,6 +240,7 @@ class QueueCollectionSpec extends SpecificationWithJUnit with TempFolder with Te
           Await.result(qc.remove("jobs")) must beSomeQItem("job1")
           Await.result(qc.remove("jobs")) must beSomeQItem("job2")
         }
+        success
       }
 
       "delete on the fly" in {
@@ -237,6 +260,7 @@ class QueueCollectionSpec extends SpecificationWithJUnit with TempFolder with Te
           new File(folderName).list().toList.sorted mustEqual List("jobs")
           Await.result(qc.remove("jobs")) must beSomeQItem("job2")
         }
+        success
       }
 
       "pass through fanout-only master" in {
@@ -252,6 +276,7 @@ class QueueCollectionSpec extends SpecificationWithJUnit with TempFolder with Te
           Await.result(qc.remove("jobs")) mustEqual None
           Await.result(qc.remove("jobs+client1")) must beSomeQItem("job1")
         }
+        success
       }
     }
 
@@ -271,6 +296,7 @@ class QueueCollectionSpec extends SpecificationWithJUnit with TempFolder with Te
             Await.result(qc.remove("expired")) mustEqual None
           }
         }
+        success
       }
 
       "move expired items from one queue to another" in {
@@ -297,6 +323,7 @@ class QueueCollectionSpec extends SpecificationWithJUnit with TempFolder with Te
             Await.result(qc.remove("expired")) must beSomeQItem("hello")
           }
         }
+        success
       }
     }
 
@@ -312,6 +339,7 @@ class QueueCollectionSpec extends SpecificationWithJUnit with TempFolder with Te
           qc.add("nom-de-guerre", "brie".getBytes)
           Await.result(qc.remove("fromage")) must beSomeQItem("brie")
         }
+        success
       }
 
       "alias to multiple queues" in {
@@ -326,6 +354,7 @@ class QueueCollectionSpec extends SpecificationWithJUnit with TempFolder with Te
           Await.result(qc.remove("fromage")) must beSomeQItem("brie")
           Await.result(qc.remove("formaggio")) must beSomeQItem("brie")
         }
+        success
       }
 
       "alias to queues with fanouts" in {
@@ -356,6 +385,7 @@ class QueueCollectionSpec extends SpecificationWithJUnit with TempFolder with Te
           Await.result(qc.remove("fromage+brie")) must beSomeQItem("cheez whiz")
           Await.result(qc.remove("formaggio+gorgonzola")) must beSomeQItem("cheez whiz")
         }
+        success
       }
 
       "alias reads always return None" in {
@@ -369,6 +399,7 @@ class QueueCollectionSpec extends SpecificationWithJUnit with TempFolder with Te
           qc.add("nom-de-guerre", "brie".getBytes)
           Await.result(qc.remove("nom-de-guerre")) must beNone
         }
+        success
       }
 
       "log queue name/alias duplicates" in {
@@ -393,6 +424,8 @@ class QueueCollectionSpec extends SpecificationWithJUnit with TempFolder with Te
 
           mustLog("queue name(s) masked by alias(es): q1, q2")
         }
+        success
+
       }
     }
 
@@ -411,8 +444,13 @@ class QueueCollectionSpec extends SpecificationWithJUnit with TempFolder with Te
             test(qc, "some_queue")
             qc.queueNames mustEqual Nil
           }
+          success
+
+
         }
       }
+      success
+
     }
 
     "configuration hierarchy" in {
@@ -427,6 +465,8 @@ class QueueCollectionSpec extends SpecificationWithJUnit with TempFolder with Te
           val q = qc.queue("foo").get
           q.config mustEqual builtInDefaultConfig.copy(maxItems = 100)
         }
+        success
+
       }
 
       "queue should override inherit from/override default queue" in {
@@ -448,6 +488,7 @@ class QueueCollectionSpec extends SpecificationWithJUnit with TempFolder with Te
                                                        maxSize = 100.bytes,     // inherit default queue
                                                        maxItemSize = 200.bytes) // override built-in
         }
+        success
       }
 
       "fanout queue should inherit from/override master queue" in {
@@ -479,6 +520,7 @@ class QueueCollectionSpec extends SpecificationWithJUnit with TempFolder with Te
                                                        maxSize = 100.bytes,            // inherit default queue
                                                        defaultJournalSize = 300.bytes) // override built-in
         }
+        success
       }
     }
   }

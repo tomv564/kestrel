@@ -115,9 +115,9 @@ class ZooKeeperServerStatus(val zkConfig: ZooKeeperConfig, statusStore: Persiste
   override def join(nodeType: String, status: TStatus): Option[EndpointStatus] = {
     try {
       val set = createServerSet(nodeType)
-      val endpointStatus = set.join(mainAddress, JavaConversions.asJavaMap(externalEndpoints), status)
+      val endpointStatus = set.join(mainAddress, JavaConversions.mapAsJavaMap(externalEndpoints), status)
       Some(endpointStatus)
-    } catch { case e =>
+    } catch { case e: Throwable =>
       // join will auto-retry the retryable set of errors -- anything we catch
       // here is not retryable
       log.error(e, "error joining %s server set for endpoint '%s'".format(nodeType, mainAddress))
@@ -166,14 +166,14 @@ abstract class AbstractZooKeeperServerStatus(statusStore: PersistentMetadataStor
 
       try {
         updateWriteMembership(Down, status)
-      } catch { case e =>
+      } catch { case e: Throwable =>
         log.error(e, "error updating write server set to Down on shutdown")
       }
       writeEndpointStatus = None
 
       try {
         updateReadMembership(Down, status)
-      } catch { case e =>
+      } catch { case e: Throwable =>
         log.error(e, "error updating read server set to Down on shutdown")
       }
       readEndpointStatus = None

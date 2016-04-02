@@ -19,9 +19,12 @@ package net.lag.kestrel
 import com.twitter.conversions.time._
 import com.twitter.util.{MockTimer, Time, TimeControl}
 import java.util.concurrent.atomic.AtomicInteger
-import org.specs.SpecificationWithJUnit
+import org.specs2.mutable._
 
-class DeadlineWaitQueueSpec extends SpecificationWithJUnit {
+class DeadlineWaitQueueSpec extends Specification {
+
+  isolated
+
   "DeadlineWaitQueue" should {
     val timer = new MockTimer
     val deadlineWaitQueue = new DeadlineWaitQueue(timer)
