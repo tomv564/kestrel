@@ -31,15 +31,11 @@ import com.twitter.ostrich.admin.{PeriodicBackgroundProcess, RuntimeEnvironment,
 import com.twitter.ostrich.stats.Stats
 import com.twitter.util.{Duration, Eval, FuturePool, Future, Time, Timer}
 import java.net.InetSocketAddress
-import java.net.URI
-import java.util.Collections._
 import config._
 import java.util.concurrent._
 import java.util.concurrent.atomic.AtomicInteger
 import org.apache.thrift.protocol.TBinaryProtocol
 import org.jboss.netty.channel.{ChannelPipelineFactory, Channels}
-// import org.jboss.netty.util.HashedWheelTimer
-import java.io.File
 
 class Kestrel(defaultQueueConfig: QueueConfig, builders: List[QueueBuilder], aliases: List[AliasBuilder],
               listenAddress: String, memcacheListenPort: Option[Int], textListenPort: Option[Int],
