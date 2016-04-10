@@ -1,7 +1,12 @@
 import sbt._
 import Keys._
 // import com.twitter.sbt._
-import sbtassembly.AssemblyPlugin.autoImport._
+// import sbtassembly.AssemblyPlugin.autoImport._
+import com.typesafe.sbt.SbtNativePackager.autoImport._
+import com.typesafe.sbt.SbtNativePackager.Universal
+import com.typesafe.sbt.packager.docker.DockerPlugin
+import com.typesafe.sbt.packager.docker.DockerPlugin.autoImport._
+import com.typesafe.sbt.packager.archetypes.JavaAppPackaging
 
 object Kestrel extends Build {
   val finagleVersion = "6.34.0"
@@ -44,18 +49,31 @@ object Kestrel extends Build {
 
       mainClass in Compile := Some("net.lag.kestrel.Kestrel"),
 
-      test in assembly := {},
+      javaOptions in Universal ++= Seq(
+        // -J params will be added as jvm parameters
+        "-J-Xmx1024m",
 
-      assemblyMergeStrategy in assembly := {
-        case "com/twitter/common/args/apt/cmdline.arg.info.txt.1"  => MergeStrategy.discard
-        case x =>
-          val oldStrategy = (assemblyMergeStrategy in assembly).value
-          oldStrategy(x)
-      }
+        // others will be added as app parameters
+        "-Dstage=production"
+      ),
+
+      dockerExposedPorts := Seq(22133, 2229, 2223),
+      dockerUpdateLatest := true
+
+      // test in assembly := {},
+
+      // assemblyMergeStrategy in assembly := {
+      //   case "com/twitter/common/args/apt/cmdline.arg.info.txt.1"  => MergeStrategy.discard
+      //   case x =>
+      //     val oldStrategy = (assemblyMergeStrategy in assembly).value
+      //     oldStrategy(x)
+      // }
       // CompileThriftScrooge.scroogeVersion := "3.0.1",
       // PackageDist.packageDistConfigFilesValidationRegex := Some(".*"),
       // SubversionPublisher.subversionRepository := Some("https://svn.twitter.biz/maven-public"),
       // publishArtifact in Test := true
     )
-  )
+  ).
+  enablePlugins(JavaAppPackaging).
+  enablePlugins(DockerPlugin)
 }
