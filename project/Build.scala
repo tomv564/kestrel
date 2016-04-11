@@ -58,6 +58,7 @@ object Kestrel extends Build {
       ),
 
       dockerExposedPorts := Seq(22133, 2229, 2223),
+      dockerExposedVolumes := Seq("/var/log/kestrel", "/var/spool/kestrel"),
       dockerUpdateLatest := true
 
       // test in assembly := {},
