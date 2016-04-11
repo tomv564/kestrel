@@ -38,9 +38,10 @@ new KestrelConfig {
 
   loggers = new LoggerConfig {
     level = Level.INFO
-    handlers = new FileHandlerConfig {
+    handlers = List(new FileHandlerConfig {
       filename = "/var/log/kestrel/kestrel.log"
       roll = Policy.SigHup
-    }
+      }, new ConsoleHandlerConfig()
+    )
   }
 }
